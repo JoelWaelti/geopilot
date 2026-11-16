@@ -16,18 +16,18 @@ Ein Zustellversuch soll später belegen, womit und wohin sein Kanal lief. Heute 
 
 **Definitions-Snapshot.** `PipelineFactory.GetDefinitionSnapshotJson` übernimmt unter `process_configs` nur noch Schlüssel, die einen Konstruktor-Parameter der Implementierung treffen, und maskiert die gekennzeichneten. Unbekannte Schlüssel ignoriert geopilot beim Binden, kopiert sie heute aber in den Snapshot; ein vertippter Schlüssel brächte so ein Secret im Klartext in die Datenbank. Dass ein vergessener Schlüssel im Snapshot nicht mehr zu sehen ist, nehmen wir dafür in Kauf. Die Parameter kommen vom Typ, den `PipelineProcessFactory` wie bei der Startprüfung auflöst; `PipelineFactory` kennt heute nur das öffentliche `IPipelineProcessFactory`, wie sie an den Typ kommt, bleibt der Umsetzung. Lässt sich der Typ nicht auflösen, fehlen die Schlüssel dieser Implementierung im Snapshot ganz.
 
-**Konfiguration pro Zustellversuch.** `DeliveryChannelFactory` stellt vor jedem Versuch die wirksame Konfiguration zusammen: pro Konstruktor-Parameter der Wert aus der ersten Quelle, aus der `Create` bindet (Basis-Konfiguration, Definition, Mandat, dieses nur für `[MandateValue]`). Die Wahl der Quelle steht danach an einer Stelle, für das Binden und das Festhalten; Lesen und Konvertieren bleiben beim Binden, denn dort wirft eine fehlende Datei, und das Festhalten soll gerade dann gelingen. Werte stehen da, wie sie konfiguriert sind, nicht konvertiert. Gekennzeichnete sind maskiert. Ein Parameter mit `[ResourceFile]` steht als Objekt mit `path`, wie konfiguriert, und `sha256` des Inhalts beim Versuch; `sha256` ist `null`, wenn die Datei fehlt oder ausserhalb des Ressourcenverzeichnisses liegt. Für den Mail-Kanal etwa:
+**Konfiguration pro Zustellversuch.** `DeliveryChannelFactory` stellt vor jedem Versuch die wirksame Konfiguration zusammen: pro Konstruktor-Parameter der Wert aus der ersten Quelle, aus der `Create` bindet, und diese Quelle als `origin`: `base` (Basis-Konfiguration), `definition` (`default_config` des Kanals mit den `channel_config_overwrites` der Reaktion, bei der Deklaration eingefroren) oder `mandate` (nur für `[MandateValue]`). Die Quellen überschneiden sich nie, das verhindern die Kollisionsregeln; zusammengeführt steht jeder Schlüssel an einer Stelle, mit seiner Herkunft. Die Wahl der Quelle steht danach an einer Stelle, für das Binden und das Festhalten; Lesen und Konvertieren bleiben beim Binden, denn dort wirft eine fehlende Datei, und das Festhalten soll gerade dann gelingen. Werte stehen da, wie sie konfiguriert sind, nicht konvertiert. Gekennzeichnete sind maskiert. Bei einem Parameter mit `[ResourceFile]` ist `value` der Pfad, wie konfiguriert, dazu kommt `sha256`, der Hash des Inhalts beim Versuch; `sha256` ist `null`, wenn die Datei fehlt oder ausserhalb des Ressourcenverzeichnisses liegt. Für den Mail-Kanal etwa:
 
 ```json
 {
-  "host": "smtp.example.com",
-  "port": "587",
-  "sender": "geopilot@example.com",
-  "username": "geopilot",
-  "password": "**********",
-  "template": { "path": "mail/info.html", "sha256": "9f86d081..." },
-  "to": ["empfang@example.com"],
-  "includeDeclarer": true
+  "host": { "value": "smtp.example.com", "origin": "base" },
+  "port": { "value": "587", "origin": "base" },
+  "sender": { "value": "geopilot@example.com", "origin": "base" },
+  "username": { "value": "geopilot", "origin": "base" },
+  "password": { "value": "**********", "origin": "base" },
+  "template": { "value": "mail/info.html", "origin": "definition", "sha256": "9f86d081..." },
+  "to": { "value": ["empfang@example.com"], "origin": "mandate" },
+  "includeDeclarer": { "value": true, "origin": "mandate" }
 }
 ```
 
@@ -37,7 +37,7 @@ Ein Zustellversuch soll später belegen, womit und wohin sein Kanal lief. Heute 
 
 **Reihenfolge.** Ein PR, begonnen nach dem Merge von #1188: Dessen Migration und GUI liegen sonst daneben, und ein Teil-PR ohne GUI müsste #1188 zum Nachziehen seiner Migration zwingen. Benennt #1195 die Tabellen vorher um, gelten die neuen Namen.
 
-**API und GUI.** `PipelineRunReactionEventResponse` bekommt `appVersion` und `config`, das JSON-Objekt wie gespeichert; die generierten Typen kommen aus `npm run openapi`. Die Detailansicht einer Verarbeitung aus #1188 lässt einen Versuch aufklappen und zeigt darunter die Version und die Konfiguration als Schlüssel und Wert, eine Ressource mit Pfad und Hash. Aufklappen lässt sich jeder Versuch mit `appVersion`, also jeder ab dieser Version, auch einer ohne `config`; dann steht dort nur die Version.
+**API und GUI.** `PipelineRunReactionEventResponse` bekommt `appVersion` und `config`, das JSON-Objekt wie gespeichert; die generierten Typen kommen aus `npm run openapi`. Die Konfiguration erscheint im Reiter *Reaktionen* der Detailansicht aus #1188, nicht im Reiter *Pipeline*. Dieser zeigt den Stand beim Start, einen pro Verarbeitung; der Reiter *Ablauf* dagegen zeigt, was ein Schritt beim Laufen bekam. Die Konfiguration eines Versuchs ist von dieser zweiten Art, denn jeder Versuch liest Basis-Konfiguration und Ressourcen neu, und zwei Versuche können verschieden laufen. In der Tabelle der Ereignisse lässt sich ein Versuch aufklappen und zeigt darunter die Version und eine Tabelle *Konfiguration* im Format der *Eingabe* im Ablauf: Parameter, Wert, Quelle und SHA-256. Die Quelle heisst «Basis der Installation» oder «Pipeline-Definition», wie im Reiter *Pipeline*, oder «Mandat». Aufklappen lässt sich jeder Versuch mit `appVersion`, also jeder ab dieser Version, auch einer ohne `config`; dann steht dort nur die Version.
 
 **Doku.**
 
@@ -59,7 +59,7 @@ Ein Zustellversuch soll später belegen, womit und wohin sein Kanal lief. Heute 
 
 ## Prüfung
 
-- `Geopilot.Pipeline.Test`: Ein gekennzeichneter Prozess-Parameter in `default_config` oder `process_config_overwrites` lässt die Startprüfung scheitern, auch ohne Eintrag in der Basis-Konfiguration und bei einem Prozess, den kein Schritt verwendet; bei einem Kanal ebenso, auch in `channel_config_overwrites`. `[SecretConfig]` mit `[MandateValue]` oder an einem anderen Typ als `string` scheitert. Der Snapshot maskiert einen gekennzeichneten Wert und lässt einen unbekannten Schlüssel weg. Die zusammengestellte Konfiguration eines Kanals nimmt jede Quelle in derselben Reihenfolge wie `Create`, maskiert und hält eine Ressource mit Pfad und Hash fest, bei fehlender Datei mit `sha256` `null`.
+- `Geopilot.Pipeline.Test`: Ein gekennzeichneter Prozess-Parameter in `default_config` oder `process_config_overwrites` lässt die Startprüfung scheitern, auch ohne Eintrag in der Basis-Konfiguration und bei einem Prozess, den kein Schritt verwendet; bei einem Kanal ebenso, auch in `channel_config_overwrites`. `[SecretConfig]` mit `[MandateValue]` oder an einem anderen Typ als `string` scheitert. Der Snapshot maskiert einen gekennzeichneten Wert und lässt einen unbekannten Schlüssel weg. Die zusammengestellte Konfiguration eines Kanals nimmt jede Quelle in derselben Reihenfolge wie `Create`, nennt zu jedem Wert diese Quelle, maskiert und hält eine Ressource mit Pfad und Hash fest, bei fehlender Datei mit `sha256` `null`.
 - `Geopilot.Api.Test`: Ein Test-Kanal mit gekennzeichnetem Parameter und einem unverwechselbaren Wert läuft einen Versuch durch, auch einen, dessen Konstruktor einen anderen Wert ablehnt. Die erste Zeile des Versuchs trägt `Config` und `AppVersion`, und der Wert steht in keiner Spalte der Protokolltabellen. Reset und Löschung haben keine Konfiguration.
-- Von Auge im Dev-Stack: Eine Mail-Reaktion gegen `mailpit-tls` zeigt in der Detailansicht aufgeklappt `password` als `**********`, das Template mit Pfad und Hash und die Empfänger.
+- Von Auge im Dev-Stack: Eine Mail-Reaktion gegen `mailpit-tls` zeigt im Reiter *Reaktionen* aufgeklappt `password` als `**********` aus der Basis der Installation, das Template mit Pfad und Hash aus der Pipeline-Definition und die Empfänger aus dem Mandat.
 - `dotnet tool run dotnet-ef migrations has-pending-model-changes` meldet nichts, CI ist grün, auch der Abgleich der generierten Typen.
