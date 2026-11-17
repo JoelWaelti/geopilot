@@ -1,0 +1,72 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Cost cap comes from the repo variable CLAUDE_REVIEW_MAX_BUDGET_USD; unset means no cap.
+          # The review itself is the project skill in .claude/skills/pr-review.
+          claude_args: "--model opus ${{ vars.CLAUDE_REVIEW_MAX_BUDGET_USD && format('--max-budget-usd {0}', vars.CLAUDE_REVIEW_MAX_BUDGET_USD) || '' }}"
+          prompt: /pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+
+      # Cost is an API list price estimate: with an OAuth token the run counts
+      # against the subscription's limits instead of being billed per token.
+      - name: Write usage metrics to step summary
+        if: always()
+        env:
+          EXECUTION_FILE: ${{ steps.claude-review.outputs.execution_file }}
+        run: |
+          if [ -z "$EXECUTION_FILE" ] || [ ! -f "$EXECUTION_FILE" ]; then
+            echo "_No execution log, usage metrics unavailable._" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          jq -r '
+            [.[] | select(.type == "result")] | last
+            | if . == null then "_No result entry in execution log._" else (
+                "## Claude usage",
+                "",
+                "| Metric | Value |",
+                "|---|---:|",
+                "| Result | \(.subtype // "unknown") |",
+                "| Turns | \(.num_turns // 0) |",
+                "| Duration | \((.duration_ms // 0) / 1000 | floor) s (API \((.duration_api_ms // 0) / 1000 | floor) s) |",
+                "| Input tokens | \(.usage.input_tokens // 0) |",
+                "| Output tokens | \(.usage.output_tokens // 0) |",
+                "| Cache read tokens | \(.usage.cache_read_input_tokens // 0) |",
+                "| Cache write tokens | \(.usage.cache_creation_input_tokens // 0) |",
+                "| Est. cost (API list price) | $\((.total_cost_usd // 0) * 10000 | round / 10000) |",
+                "",
+                "### Per model",
+                "",
+                "| Model | Input | Output | Cache read | Cache write | Est. cost |",
+                "|---|---:|---:|---:|---:|---:|",
+                (.modelUsage // {} | to_entries[]
+                  | "| \(.key) | \(.value.inputTokens // 0) | \(.value.outputTokens // 0) | \(.value.cacheReadInputTokens // 0) | \(.value.cacheCreationInputTokens // 0) | $\((.value.costUSD // 0) * 10000 | round / 10000) |")
+              ) end
+          ' "$EXECUTION_FILE" >> "$GITHUB_STEP_SUMMARY"
