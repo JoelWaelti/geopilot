@@ -11,6 +11,7 @@ Provide a code review for the given pull request.
 **Agent assumptions (applies to all agents and subagents):**
 - All tools are functional and will work without error. Do not test tools or make exploratory calls. Make sure this is clear to every subagent that is launched.
 - Only call a tool if it is required to complete the task. Every tool call should have a clear purpose.
+- Run every subagent in the foreground (`run_in_background: false`) and wait for its result. This review runs headless: it ends when your turn ends, so background agents never report back. To run agents in parallel, launch several foreground agents in one message.
 
 **Before step 1:**
 - Record the current PR head commit (`gh pr view <PR> --json headRefOid`). This is the commit you are reviewing, use it for the marker in step 8 even if new commits arrive during the review.
