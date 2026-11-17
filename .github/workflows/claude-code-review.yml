@@ -30,8 +30,12 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Cost cap comes from the repo variable CLAUDE_REVIEW_MAX_BUDGET_USD; unset means no cap.
-          # The review itself is the project skill in .claude/skills/pr-review.
-          claude_args: "--model opus ${{ vars.CLAUDE_REVIEW_MAX_BUDGET_USD && format('--max-budget-usd {0}', vars.CLAUDE_REVIEW_MAX_BUDGET_USD) || '' }}"
+          # The review itself is the project skill in .claude/skills/pr-review. --allowedTools grants the
+          # tools that skill lists, so the non-interactive run does not deny its gh calls and comments.
+          claude_args: |
+            --model opus
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh api:*)"
+            ${{ vars.CLAUDE_REVIEW_MAX_BUDGET_USD && format('--max-budget-usd {0}', vars.CLAUDE_REVIEW_MAX_BUDGET_USD) || '' }}
           prompt: /pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
 
       # Cost is an API list price estimate: with an OAuth token the run counts
