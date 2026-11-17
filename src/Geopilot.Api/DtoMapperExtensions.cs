@@ -187,42 +187,42 @@ internal static class DtoMapperExtensions
     }
 
     /// <summary>
-    /// Maps a <see cref="PipelineRun"/> including its children to a <see cref="PipelineRunResponse"/>.
+    /// Maps a <see cref="Recording"/> including its children to a <see cref="RecordingResponse"/>.
     /// The definition snapshot is deliberately not part of the response; it is served by its own endpoint.
     /// </summary>
-    public static PipelineRunResponse ToResponse(this PipelineRun run)
+    public static RecordingResponse ToResponse(this Recording recording)
     {
-        return new PipelineRunResponse(
-            run.JobId,
-            run.PipelineId,
-            run.AppVersion,
-            run.MandateId,
-            run.UserId,
-            run.MachineClientId,
-            run.ClientKind,
-            run.Declarability,
-            run.UploadId,
-            run.UploadStorageLocation,
-            run.UploadInitiatedAt,
-            run.StartedAt,
-            run.ScanState,
-            run.ScanDetails,
-            run.TerminalState,
-            run.TerminalAt,
-            run.FailureReason,
-            run.DeclarationFailure,
-            run.Files
+        return new RecordingResponse(
+            recording.JobId,
+            recording.PipelineId,
+            recording.AppVersion,
+            recording.MandateId,
+            recording.UserId,
+            recording.MachineClientId,
+            recording.ClientKind,
+            recording.Declarability,
+            recording.UploadId,
+            recording.UploadStorageLocation,
+            recording.UploadInitiatedAt,
+            recording.StartedAt,
+            recording.ScanState,
+            recording.ScanDetails,
+            recording.TerminalState,
+            recording.TerminalAt,
+            recording.FailureReason,
+            recording.DeclarationFailure,
+            recording.Files
                 .OrderBy(file => file.Id)
-                .Select(file => new PipelineRunFileResponse(file.FileName, file.StorageKey, file.DeclaredSize, file.Sha256))
+                .Select(file => new RecordingFileResponse(file.FileName, file.StorageKey, file.DeclaredSize, file.Sha256))
                 .ToList(),
-            run.Steps
+            recording.Steps
                 .OrderBy(step => step.Order)
                 .Select(step => step.ToResponse())
                 .ToList(),
-            run.ReactionEvents
+            recording.ReactionEvents
                 .OrderBy(reactionEvent => reactionEvent.OccurredAt)
                 .ThenBy(reactionEvent => reactionEvent.Id)
-                .Select(reactionEvent => new PipelineRunReactionEventResponse(
+                .Select(reactionEvent => new RecordingReactionEventResponse(
                     reactionEvent.DeliveryId,
                     reactionEvent.ReactionId,
                     reactionEvent.ReactionKind,
@@ -240,9 +240,9 @@ internal static class DtoMapperExtensions
     private static Dictionary<string, string?>? DeserializeEvaluatedValues(string? evaluatedValues) =>
         evaluatedValues is null ? null : JsonSerializer.Deserialize<Dictionary<string, string?>>(evaluatedValues);
 
-    private static PipelineRunStepResponse ToResponse(this PipelineRunStep step)
+    private static RecordingStepResponse ToResponse(this RecordingStep step)
     {
-        return new PipelineRunStepResponse(
+        return new RecordingStepResponse(
             step.StepId,
             step.DisplayName,
             step.ProcessImplementation,
@@ -256,7 +256,7 @@ internal static class DtoMapperExtensions
             step.ConditionMessage,
             step.Inputs
                 .OrderBy(input => input.Id)
-                .Select(input => new PipelineRunInputResponse(
+                .Select(input => new RecordingInputResponse(
                     input.Parameter,
                     input.Origin,
                     input.Reference,
@@ -269,7 +269,7 @@ internal static class DtoMapperExtensions
                 .ToList(),
             step.Conditions
                 .OrderBy(condition => condition.Id)
-                .Select(condition => new PipelineRunConditionResponse(
+                .Select(condition => new RecordingConditionResponse(
                     condition.ConditionId,
                     condition.Phase,
                     condition.Kind,
@@ -279,7 +279,7 @@ internal static class DtoMapperExtensions
                 .ToList(),
             step.Artifacts
                 .OrderBy(artifact => artifact.Id)
-                .Select(artifact => new PipelineRunArtifactResponse(
+                .Select(artifact => new RecordingArtifactResponse(
                     artifact.Kind,
                     artifact.OriginalFileName,
                     artifact.PersistedFileName,

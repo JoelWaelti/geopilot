@@ -8,7 +8,7 @@ namespace Geopilot.Api.Models;
 /// "checked and did not apply" stays distinguishable from "never checked". This is the durable answer to
 /// why a step was skipped, warned, failed, or restricted delivery.
 /// </summary>
-public class PipelineRunCondition
+public class RecordingCondition
 {
     /// <summary>
     /// The unique identifier for the condition record.
@@ -18,12 +18,12 @@ public class PipelineRunCondition
     /// <summary>
     /// The step record this evaluation belongs to.
     /// </summary>
-    public int PipelineRunStepId { get; set; }
+    public int RecordingStepId { get; set; }
 
     /// <summary>
     /// Navigation to the step record.
     /// </summary>
-    public PipelineRunStep Step { get; set; } = null!;
+    public RecordingStep Step { get; set; } = null!;
 
     /// <summary>
     /// The optional stable identifier of the condition from the pipeline definition. The

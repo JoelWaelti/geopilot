@@ -3,12 +3,12 @@
 namespace Geopilot.Api.Models;
 
 /// <summary>
-/// Something that happened to a reaction of the delivery a run produced: an attempt through its channel, a reset or
-/// the deletion of the delivery. Kept in the protocol of the run, so how a delivery was forwarded stays answerable
+/// Something that happened to a reaction of the delivery a job produced: an attempt through its channel, a reset or
+/// the deletion of the delivery. Kept in the recording, so how a delivery was forwarded stays answerable
 /// after its reactions are gone. Holds no personal data of the declarer; the message of an attempt can name its
 /// target and with it a value of the mandate, such as the subfolder of a file drop.
 /// </summary>
-public class PipelineRunReactionEvent
+public class RecordingReactionEvent
 {
     /// <summary>
     /// The unique identifier for the event record.
@@ -16,9 +16,9 @@ public class PipelineRunReactionEvent
     public int Id { get; set; }
 
     /// <summary>
-    /// The run whose delivery the reaction belongs to.
+    /// The recording whose delivery the reaction belongs to.
     /// </summary>
-    public int PipelineRunId { get; set; }
+    public int RecordingId { get; set; }
 
     /// <summary>
     /// The id of the delivery the reaction belongs to. A plain value rather than a reference: deliveries are filtered

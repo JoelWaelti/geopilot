@@ -9,26 +9,26 @@ using System.Text.Json;
 
 namespace Geopilot.Api.Processing;
 
-/// <inheritdoc cref="IPipelineRunRecorder"/>
-public class PipelineRunRecorder : IPipelineRunRecorder
+/// <inheritdoc cref="IRecorder"/>
+public class Recorder : IRecorder
 {
-    private static readonly string AppVersion = VersionOf(typeof(PipelineRunRecorder).Assembly) ?? string.Empty;
+    private static readonly string AppVersion = VersionOf(typeof(Recorder).Assembly) ?? string.Empty;
 
     private readonly Context context;
     private readonly IPipelineFactory pipelineFactory;
     private readonly IUploadStorage uploadStorage;
     private readonly IHttpContextAccessor httpContextAccessor;
-    private readonly ILogger<PipelineRunRecorder> logger;
+    private readonly ILogger<Recorder> logger;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="PipelineRunRecorder"/> class.
+    /// Initializes a new instance of the <see cref="Recorder"/> class.
     /// </summary>
-    public PipelineRunRecorder(
+    public Recorder(
         Context context,
         IPipelineFactory pipelineFactory,
         IUploadStorage uploadStorage,
         IHttpContextAccessor httpContextAccessor,
-        ILogger<PipelineRunRecorder> logger)
+        ILogger<Recorder> logger)
     {
         this.context = context;
         this.pipelineFactory = pipelineFactory;
@@ -45,9 +45,9 @@ public class PipelineRunRecorder : IPipelineRunRecorder
         ArgumentNullException.ThrowIfNull(upload);
 
         var pipelineId = job.Pipeline?.Id
-            ?? throw new InvalidOperationException($"Job <{job.Id}> has no pipeline attached; the run record needs its id.");
+            ?? throw new InvalidOperationException($"Job <{job.Id}> has no pipeline attached; the recording needs its id.");
 
-        var run = new PipelineRun
+        var recording = new Recording
         {
             JobId = job.Id,
             PipelineId = pipelineId,
@@ -64,7 +64,7 @@ public class PipelineRunRecorder : IPipelineRunRecorder
             StartedAt = DateTime.UtcNow,
             ScanState = ScanState.NotScanned,
             Files = upload.Files
-                .Select(file => new PipelineRunFile
+                .Select(file => new RecordingFile
                 {
                     FileName = file.FileName,
                     StorageKey = file.StorageKey,
@@ -81,7 +81,7 @@ public class PipelineRunRecorder : IPipelineRunRecorder
                 .ToList(),
         };
 
-        context.PipelineRuns.Add(run);
+        context.Recordings.Add(recording);
         await context.SaveChangesAsync();
     }
 
@@ -92,21 +92,21 @@ public class PipelineRunRecorder : IPipelineRunRecorder
 
         try
         {
-            var run = await context.PipelineRuns.Include(r => r.Files).SingleOrDefaultAsync(r => r.JobId == jobId);
-            if (run is null)
+            var recording = await context.Recordings.Include(r => r.Files).SingleOrDefaultAsync(r => r.JobId == jobId);
+            if (recording is null)
             {
                 LogRunMissing(jobId);
                 return;
             }
 
-            run.ScanState = !scanResult.Scanned
+            recording.ScanState = !scanResult.Scanned
                 ? ScanState.NotScanned
                 : scanResult.IsClean ? ScanState.Clean : ScanState.ThreatDetected;
-            run.ScanDetails = scanResult.ThreatDetails;
+            recording.ScanDetails = scanResult.ThreatDetails;
 
             if (scanResult.Hashes is { } hashes)
             {
-                foreach (var file in run.Files)
+                foreach (var file in recording.Files)
                 {
                     if (hashes.TryGetValue(file.StorageKey, out var hash))
                         file.Sha256 = hash;
@@ -126,16 +126,16 @@ public class PipelineRunRecorder : IPipelineRunRecorder
     {
         try
         {
-            var run = await context.PipelineRuns.SingleOrDefaultAsync(r => r.JobId == jobId);
-            if (run is null)
+            var recording = await context.Recordings.SingleOrDefaultAsync(r => r.JobId == jobId);
+            if (recording is null)
             {
                 LogRunMissing(jobId);
                 return;
             }
 
-            run.TerminalState = ProcessingState.Failed;
-            run.TerminalAt = DateTime.UtcNow;
-            run.FailureReason = failureReason;
+            recording.TerminalState = ProcessingState.Failed;
+            recording.TerminalAt = DateTime.UtcNow;
+            recording.FailureReason = failureReason;
             await context.SaveChangesAsync();
         }
         catch (Exception ex)
@@ -152,17 +152,17 @@ public class PipelineRunRecorder : IPipelineRunRecorder
 
         try
         {
-            var run = await context.PipelineRuns.SingleOrDefaultAsync(r => r.JobId == jobId);
-            if (run is null)
+            var recording = await context.Recordings.SingleOrDefaultAsync(r => r.JobId == jobId);
+            if (recording is null)
             {
                 LogRunMissing(jobId);
                 return;
             }
 
-            var row = await context.PipelineRunSteps
-                .SingleOrDefaultAsync(s => s.PipelineRunId == run.Id && s.StepId == step.Id);
+            var row = await context.RecordingSteps
+                .SingleOrDefaultAsync(s => s.RecordingId == recording.Id && s.StepId == step.Id);
             if (row is null)
-                row = CreateMissingStepRow(run.Id, jobId, step, order);
+                row = CreateMissingStepRow(recording.Id, jobId, step, order);
 
             row.State = StepState.Running;
             row.StartedAt = step.StartedAt ?? DateTime.UtcNow;
@@ -182,17 +182,17 @@ public class PipelineRunRecorder : IPipelineRunRecorder
 
         try
         {
-            var run = await context.PipelineRuns.Include(r => r.Files).SingleOrDefaultAsync(r => r.JobId == jobId);
-            if (run is null)
+            var recording = await context.Recordings.Include(r => r.Files).SingleOrDefaultAsync(r => r.JobId == jobId);
+            if (recording is null)
             {
                 LogRunMissing(jobId);
                 return;
             }
 
-            var row = await context.PipelineRunSteps.SingleOrDefaultAsync(s => s.PipelineRunId == run.Id && s.StepId == pipelineStep.Id)
-                ?? CreateMissingStepRow(run.Id, jobId, pipelineStep, order);
+            var row = await context.RecordingSteps.SingleOrDefaultAsync(s => s.RecordingId == recording.Id && s.StepId == pipelineStep.Id)
+                ?? CreateMissingStepRow(recording.Id, jobId, pipelineStep, order);
 
-            row.Inputs.AddRange(inputs.Select(input => NewInputRow(input, run.Files)));
+            row.Inputs.AddRange(inputs.Select(input => NewInputRow(input, recording.Files)));
             await context.SaveChangesAsync();
         }
         catch (Exception ex)
@@ -209,16 +209,16 @@ public class PipelineRunRecorder : IPipelineRunRecorder
 
         try
         {
-            var run = await context.PipelineRuns.SingleOrDefaultAsync(r => r.JobId == jobId);
-            if (run is null)
+            var recording = await context.Recordings.SingleOrDefaultAsync(r => r.JobId == jobId);
+            if (recording is null)
             {
                 LogRunMissing(jobId);
                 return;
             }
 
-            var row = await LoadStepRowAsync(run.Id, step.Id);
+            var row = await LoadStepRowAsync(recording.Id, step.Id);
             if (row is null)
-                row = CreateMissingStepRow(run.Id, jobId, step, order);
+                row = CreateMissingStepRow(recording.Id, jobId, step, order);
 
             UpdateStepRow(row, step);
             await context.SaveChangesAsync();
@@ -236,8 +236,8 @@ public class PipelineRunRecorder : IPipelineRunRecorder
 
         try
         {
-            var run = await context.PipelineRuns.SingleOrDefaultAsync(r => r.JobId == jobId, cancellationToken);
-            if (run is null)
+            var recording = await context.Recordings.SingleOrDefaultAsync(r => r.JobId == jobId, cancellationToken);
+            if (recording is null)
             {
                 LogRunMissing(jobId);
                 return;
@@ -248,16 +248,16 @@ public class PipelineRunRecorder : IPipelineRunRecorder
             for (var order = 0; order < steps.Count; order++)
             {
                 var step = steps[order];
-                var row = await LoadStepRowAsync(run.Id, step.Id, cancellationToken);
+                var row = await LoadStepRowAsync(recording.Id, step.Id, cancellationToken);
                 if (row is null)
-                    row = CreateMissingStepRow(run.Id, jobId, step, order);
+                    row = CreateMissingStepRow(recording.Id, jobId, step, order);
 
                 UpdateStepRow(row, step);
             }
 
-            run.TerminalState = terminalState;
-            run.TerminalAt = DateTime.UtcNow;
-            run.FailureReason = failureReason;
+            recording.TerminalState = terminalState;
+            recording.TerminalAt = DateTime.UtcNow;
+            recording.FailureReason = failureReason;
             await context.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -271,14 +271,14 @@ public class PipelineRunRecorder : IPipelineRunRecorder
     {
         try
         {
-            var run = await context.PipelineRuns.SingleOrDefaultAsync(r => r.JobId == jobId);
-            if (run is null)
+            var recording = await context.Recordings.SingleOrDefaultAsync(r => r.JobId == jobId);
+            if (recording is null)
             {
                 LogRunMissing(jobId);
                 return;
             }
 
-            run.DeclarationFailure = reason;
+            recording.DeclarationFailure = reason;
             await context.SaveChangesAsync();
         }
         catch (Exception ex)
@@ -300,7 +300,7 @@ public class PipelineRunRecorder : IPipelineRunRecorder
                 return;
             }
 
-            context.PipelineRunReactionEvents.Add(NewAttemptRow(runId, reaction));
+            context.RecordingReactionEvents.Add(NewAttemptRow(runId, reaction));
             await context.SaveChangesAsync();
         }
         catch (Exception ex)
@@ -323,8 +323,8 @@ public class PipelineRunRecorder : IPipelineRunRecorder
                 return;
             }
 
-            var row = await context.PipelineRunReactionEvents
-                .Where(e => e.PipelineRunId == runId
+            var row = await context.RecordingReactionEvents
+                .Where(e => e.RecordingId == runId
                     && e.DeliveryId == reaction.DeliveryId
                     && e.ReactionId == reaction.ReactionId
                     && e.Event == ReactionEvent.Attempt
@@ -335,7 +335,7 @@ public class PipelineRunRecorder : IPipelineRunRecorder
             {
                 logger.LogWarning("No row exists for attempt {Attempt} of the reaction <{ReactionId}> of delivery <{DeliveryId}>; creating it late.", reaction.Attempts, reaction.ReactionId, reaction.DeliveryId);
                 row = NewAttemptRow(runId, reaction);
-                context.PipelineRunReactionEvents.Add(row);
+                context.RecordingReactionEvents.Add(row);
             }
 
             row.FinishedAt = DateTime.UtcNow;
@@ -376,9 +376,9 @@ public class PipelineRunRecorder : IPipelineRunRecorder
             }
 
             var occurredAt = DateTime.UtcNow;
-            context.PipelineRunReactionEvents.AddRange(reactions.Select(reaction => new PipelineRunReactionEvent
+            context.RecordingReactionEvents.AddRange(reactions.Select(reaction => new RecordingReactionEvent
             {
-                PipelineRunId = runId,
+                RecordingId = runId,
                 DeliveryId = deliveryId,
                 ReactionId = reaction.ReactionId,
                 ReactionKind = reaction.Kind,
@@ -399,22 +399,22 @@ public class PipelineRunRecorder : IPipelineRunRecorder
     }
 
     /// <summary>
-    /// Finds the run a delivery comes from, also for a deleted delivery: the protocol outlives it.
+    /// Finds the recording a delivery comes from, also for a deleted delivery: the protocol outlives it.
     /// </summary>
     private Task<int?> FindRunOfDeliveryAsync(int deliveryId)
     {
         return context.Deliveries
             .IgnoreQueryFilters()
             .Where(delivery => delivery.Id == deliveryId)
-            .Join(context.PipelineRuns, delivery => delivery.JobId, run => run.JobId, (delivery, run) => (int?)run.Id)
+            .Join(context.Recordings, delivery => delivery.JobId, recording => recording.JobId, (delivery, recording) => (int?)recording.Id)
             .SingleOrDefaultAsync();
     }
 
-    private static PipelineRunReactionEvent NewAttemptRow(int runId, DeliveryReaction reaction)
+    private static RecordingReactionEvent NewAttemptRow(int runId, DeliveryReaction reaction)
     {
-        return new PipelineRunReactionEvent
+        return new RecordingReactionEvent
         {
-            PipelineRunId = runId,
+            RecordingId = runId,
             DeliveryId = reaction.DeliveryId,
             ReactionId = reaction.ReactionId,
             ReactionKind = reaction.Kind,
@@ -431,22 +431,22 @@ public class PipelineRunRecorder : IPipelineRunRecorder
     /// record, so having to create one late is an anomaly worth noticing (e.g. a definition change between
     /// start and run); creating it anyway keeps the protocol complete.
     /// </summary>
-    private PipelineRunStep CreateMissingStepRow(int runId, Guid jobId, IPipelineStep step, int order)
+    private RecordingStep CreateMissingStepRow(int runId, Guid jobId, IPipelineStep step, int order)
     {
         logger.LogWarning("No step row exists for job <{JobId}>, step <{StepId}>; creating it late.", jobId, step.Id);
         var row = NewStepRow(runId, step, order);
-        context.PipelineRunSteps.Add(row);
+        context.RecordingSteps.Add(row);
         return row;
     }
 
-    private static PipelineRunStep NewStepRow(int runId, IPipelineStep step, int order)
+    private static RecordingStep NewStepRow(int runId, IPipelineStep step, int order)
     {
         var processType = step.Process.GetType();
         var assemblyName = processType.Assembly.GetName();
 
-        return new PipelineRunStep
+        return new RecordingStep
         {
-            PipelineRunId = runId,
+            RecordingId = runId,
             Order = order,
             StepId = step.Id,
             DisplayName = step.DisplayName,
@@ -467,13 +467,13 @@ public class PipelineRunRecorder : IPipelineRunRecorder
     /// just to measure it: its size comes from there, and its hash too when the step took it from the upload itself. A
     /// file an earlier step passed on carries no hash, like every file of an earlier step.
     /// </summary>
-    private static PipelineRunInput NewInputRow(StepInput input, IReadOnlyCollection<PipelineRunFile> manifest)
+    private static RecordingInput NewInputRow(StepInput input, IReadOnlyCollection<RecordingFile> manifest)
     {
         var uploadedFile = input.FromUpload == true
             ? manifest.FirstOrDefault(file => string.Equals(file.FileName, input.FileName, StringComparison.Ordinal))
             : null;
 
-        return new PipelineRunInput
+        return new RecordingInput
         {
             Parameter = input.Parameter,
             Origin = input.Origin,
@@ -487,7 +487,7 @@ public class PipelineRunRecorder : IPipelineRunRecorder
         };
     }
 
-    private static void UpdateStepRow(PipelineRunStep row, IPipelineStep step)
+    private static void UpdateStepRow(RecordingStep row, IPipelineStep step)
     {
         row.State = step.State;
         row.StartedAt = step.StartedAt;
@@ -499,7 +499,7 @@ public class PipelineRunRecorder : IPipelineRunRecorder
         // Evaluations are appended once per run of the step, so an existing set is simply complete.
         if (row.Conditions.Count == 0)
         {
-            row.Conditions.AddRange(step.ConditionEvaluations.Select(evaluation => new PipelineRunCondition
+            row.Conditions.AddRange(step.ConditionEvaluations.Select(evaluation => new RecordingCondition
             {
                 ConditionId = evaluation.ConditionId,
                 Phase = evaluation.Phase,
@@ -515,14 +515,14 @@ public class PipelineRunRecorder : IPipelineRunRecorder
         AddMissingArtifacts(row, ArtifactKind.Delivery, step.DeliveryFiles.Select(file => (file.OriginalFileName, file.PersistedFileName, (bool?)file.FromUpload)));
     }
 
-    private static void AddMissingArtifacts(PipelineRunStep row, ArtifactKind kind, IEnumerable<(string OriginalFileName, string PersistedFileName, bool? FromUpload)> artifacts)
+    private static void AddMissingArtifacts(RecordingStep row, ArtifactKind kind, IEnumerable<(string OriginalFileName, string PersistedFileName, bool? FromUpload)> artifacts)
     {
         foreach (var artifact in artifacts)
         {
             if (row.Artifacts.Any(existing => existing.Kind == kind && string.Equals(existing.PersistedFileName, artifact.PersistedFileName, StringComparison.Ordinal)))
                 continue;
 
-            row.Artifacts.Add(new PipelineRunArtifact
+            row.Artifacts.Add(new RecordingArtifact
             {
                 Kind = kind,
                 OriginalFileName = artifact.OriginalFileName,
@@ -532,12 +532,12 @@ public class PipelineRunRecorder : IPipelineRunRecorder
         }
     }
 
-    private async Task<PipelineRunStep?> LoadStepRowAsync(int runId, string stepId, CancellationToken cancellationToken = default)
+    private async Task<RecordingStep?> LoadStepRowAsync(int runId, string stepId, CancellationToken cancellationToken = default)
     {
-        return await context.PipelineRunSteps
+        return await context.RecordingSteps
             .Include(s => s.Conditions)
             .Include(s => s.Artifacts)
-            .SingleOrDefaultAsync(s => s.PipelineRunId == runId && s.StepId == stepId, cancellationToken);
+            .SingleOrDefaultAsync(s => s.RecordingId == runId && s.StepId == stepId, cancellationToken);
     }
 
     /// <summary>
@@ -565,13 +565,13 @@ public class PipelineRunRecorder : IPipelineRunRecorder
     }
 
     private void LogRunMissing(Guid jobId) =>
-        logger.LogWarning("No run record exists for job <{JobId}>; skipping the protocol write.", jobId);
+        logger.LogWarning("No recording exists for job <{JobId}>; skipping the protocol write.", jobId);
 
     private void LogWriteFailed(Guid jobId, Exception exception) =>
         logger.LogWarning(exception, "Writing the execution protocol for job <{JobId}> failed; the job continues.", jobId);
 
     private void LogRunOfDeliveryMissing(int deliveryId) =>
-        logger.LogWarning("No run record exists for delivery <{DeliveryId}>; skipping the protocol write.", deliveryId);
+        logger.LogWarning("No recording exists for delivery <{DeliveryId}>; skipping the protocol write.", deliveryId);
 
     private void LogReactionWriteFailed(int deliveryId, Exception exception) =>
         logger.LogWarning(exception, "Writing the execution protocol for delivery <{DeliveryId}> failed.", deliveryId);
@@ -579,7 +579,7 @@ public class PipelineRunRecorder : IPipelineRunRecorder
     // A row the database refused would otherwise go along with the next write of the same context and fail it again.
     private void ForgetUnsavedReactionEvents()
     {
-        foreach (var entry in context.ChangeTracker.Entries<PipelineRunReactionEvent>().Where(entry => entry.State is EntityState.Added or EntityState.Modified).ToList())
+        foreach (var entry in context.ChangeTracker.Entries<RecordingReactionEvent>().Where(entry => entry.State is EntityState.Added or EntityState.Modified).ToList())
             entry.State = EntityState.Detached;
     }
 }

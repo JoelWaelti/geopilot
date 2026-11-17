@@ -8,16 +8,16 @@ using Moq;
 namespace Geopilot.Api.Controllers;
 
 [TestClass]
-public sealed class PipelineRunControllerTest
+public sealed class RecordingControllerTest
 {
     private Context context;
-    private PipelineRunController controller;
+    private RecordingController controller;
 
     [TestInitialize]
     public void Initialize()
     {
         context = AssemblyInitialize.DbFixture.GetTestContext();
-        controller = new PipelineRunController(Mock.Of<ILogger<PipelineRunController>>(), context);
+        controller = new RecordingController(Mock.Of<ILogger<RecordingController>>(), context);
     }
 
     [TestCleanup]
@@ -29,11 +29,11 @@ public sealed class PipelineRunControllerTest
     [TestMethod]
     public async Task GetReturnsProtocolWithStepsInPipelineOrder()
     {
-        var run = SeedRun();
+        var recording = SeedRecording();
 
-        var response = ActionResultAssert.IsOkObjectResult<PipelineRunResponse>(await controller.Get(run.JobId));
+        var response = ActionResultAssert.IsOkObjectResult<RecordingResponse>(await controller.Get(recording.JobId));
 
-        Assert.AreEqual(run.JobId, response.JobId);
+        Assert.AreEqual(recording.JobId, response.JobId);
         Assert.AreEqual("pipe_a", response.PipelineId);
         Assert.AreEqual(ProcessingState.DeliveryRestriction, response.TerminalState);
         Assert.AreEqual(ScanState.Clean, response.ScanState);
@@ -59,8 +59,8 @@ public sealed class PipelineRunControllerTest
         CollectionAssert.AreEqual(
             new[]
             {
-                new PipelineRunInputResponse("transferFile", InputOrigin.StepOutput, "matching.XtfFiles", InputKind.File, null, "data.xtf", 1024, null, true),
-                new PipelineRunInputResponse("profile", InputOrigin.Definition, null, InputKind.Value, "DMAV", null, null, null, null),
+                new RecordingInputResponse("transferFile", InputOrigin.StepOutput, "matching.XtfFiles", InputKind.File, null, "data.xtf", 1024, null, true),
+                new RecordingInputResponse("profile", InputOrigin.Definition, null, InputKind.Value, "DMAV", null, null, null, null),
             },
             response.Steps[1].Inputs,
             "the inputs are returned in the order they were recorded.");
@@ -69,9 +69,9 @@ public sealed class PipelineRunControllerTest
     [TestMethod]
     public async Task GetReturnsTheReactionEventsInTheOrderTheyHappened()
     {
-        var run = SeedRun();
+        var recording = SeedRecording();
 
-        var response = ActionResultAssert.IsOkObjectResult<PipelineRunResponse>(await controller.Get(run.JobId));
+        var response = ActionResultAssert.IsOkObjectResult<RecordingResponse>(await controller.Get(recording.JobId));
 
         CollectionAssert.AreEqual(new int?[] { 1, 2 }, response.ReactionEvents.Select(reactionEvent => reactionEvent.Attempt).ToArray());
         var first = response.ReactionEvents[0];
@@ -88,13 +88,13 @@ public sealed class PipelineRunControllerTest
     [TestMethod]
     public async Task GetReturnsWhetherTheRunWasDeclarableAndWhyItsDeclarationFailed()
     {
-        var run = SeedRun();
-        run.TerminalState = ProcessingState.Success;
-        run.Declarability = Declarability.Declarable;
-        run.DeclarationFailure = "No assets found.";
+        var recording = SeedRecording();
+        recording.TerminalState = ProcessingState.Success;
+        recording.Declarability = Declarability.Declarable;
+        recording.DeclarationFailure = "No assets found.";
         context.SaveChanges();
 
-        var response = ActionResultAssert.IsOkObjectResult<PipelineRunResponse>(await controller.Get(run.JobId));
+        var response = ActionResultAssert.IsOkObjectResult<RecordingResponse>(await controller.Get(recording.JobId));
 
         Assert.AreEqual(Declarability.Declarable, response.Declarability);
         Assert.AreEqual("No assets found.", response.DeclarationFailure);
@@ -103,11 +103,11 @@ public sealed class PipelineRunControllerTest
     [TestMethod]
     public async Task GetLeavesTheDeclarabilityOfAnOlderRunOpen()
     {
-        var run = SeedRun();
+        var recording = SeedRecording();
 
-        var response = ActionResultAssert.IsOkObjectResult<PipelineRunResponse>(await controller.Get(run.JobId));
+        var response = ActionResultAssert.IsOkObjectResult<RecordingResponse>(await controller.Get(recording.JobId));
 
-        Assert.IsNull(response.Declarability, "A run recorded before the protocol kept its declarability says nothing about it, which is not the same as not declarable.");
+        Assert.IsNull(response.Declarability, "A recording written before the protocol kept its declarability says nothing about it, which is not the same as not declarable.");
     }
 
     [TestMethod]
@@ -119,9 +119,9 @@ public sealed class PipelineRunControllerTest
     [TestMethod]
     public async Task GetDefinitionServesTheSnapshotVerbatim()
     {
-        var run = SeedRun();
+        var recording = SeedRecording();
 
-        var result = await controller.GetDefinition(run.JobId);
+        var result = await controller.GetDefinition(recording.JobId);
 
         var content = result as ContentResult;
         Assert.IsNotNull(content, "the snapshot is passed through verbatim, not re-serialized.");
@@ -135,9 +135,9 @@ public sealed class PipelineRunControllerTest
         ActionResultAssert.IsNotFound(await controller.GetDefinition(Guid.NewGuid()));
     }
 
-    private PipelineRun SeedRun()
+    private Recording SeedRecording()
     {
-        var run = new PipelineRun
+        var recording = new Recording
         {
             JobId = Guid.NewGuid(),
             PipelineId = "pipe_a",
@@ -151,11 +151,11 @@ public sealed class PipelineRunControllerTest
             ScanState = ScanState.Clean,
             TerminalState = ProcessingState.DeliveryRestriction,
             TerminalAt = DateTime.UtcNow,
-            Files = new List<PipelineRunFile>
+            Files = new List<RecordingFile>
             {
                 new() { FileName = "data.xtf", StorageKey = "uploads/1/data.xtf", DeclaredSize = 1024, Sha256 = "cafe01" },
             },
-            Steps = new List<PipelineRunStep>
+            Steps = new List<RecordingStep>
             {
                 // Inserted out of pipeline order on purpose; the response must order by Order.
                 new()
@@ -165,7 +165,7 @@ public sealed class PipelineRunControllerTest
                     DisplayName = TestHelpers.Localized("Validierung"),
                     ProcessImplementation = "Geopilot.Pipeline.Processes.XtfValidation.XtfValidatorProcess",
                     State = StepState.DeliveryRestriction,
-                    Conditions = new List<PipelineRunCondition>
+                    Conditions = new List<RecordingCondition>
                     {
                         new()
                         {
@@ -177,11 +177,11 @@ public sealed class PipelineRunControllerTest
                             EvaluatedValues = """{"validation.ValidationSuccessful":"False"}""",
                         },
                     },
-                    Artifacts = new List<PipelineRunArtifact>
+                    Artifacts = new List<RecordingArtifact>
                     {
                         new() { Kind = ArtifactKind.Download, OriginalFileName = "error.log", PersistedFileName = "validation_error.log" },
                     },
-                    Inputs = new List<PipelineRunInput>
+                    Inputs = new List<RecordingInput>
                     {
                         new() { Parameter = "transferFile", Origin = InputOrigin.StepOutput, Reference = "matching.XtfFiles", Kind = InputKind.File, FileName = "data.xtf", Size = 1024, FromUpload = true },
                         new() { Parameter = "profile", Origin = InputOrigin.Definition, Kind = InputKind.Value, Value = "DMAV" },
@@ -196,7 +196,7 @@ public sealed class PipelineRunControllerTest
                     State = StepState.Success,
                 },
             },
-            ReactionEvents = new List<PipelineRunReactionEvent>
+            ReactionEvents = new List<RecordingReactionEvent>
             {
                 // Inserted out of order on purpose; the response must order by when it happened.
                 ReactionAttempt(2, DateTime.UtcNow.AddMinutes(-1), ReactionState.Done, "Delivered to the target."),
@@ -204,12 +204,12 @@ public sealed class PipelineRunControllerTest
             },
         };
 
-        context.PipelineRuns.Add(run);
+        context.Recordings.Add(recording);
         context.SaveChanges();
-        return run;
+        return recording;
     }
 
-    private static PipelineRunReactionEvent ReactionAttempt(int attempt, DateTime startedAt, ReactionState state, string message) => new()
+    private static RecordingReactionEvent ReactionAttempt(int attempt, DateTime startedAt, ReactionState state, string message) => new()
     {
         DeliveryId = 42,
         ReactionId = "weitergabe",

@@ -8,10 +8,10 @@ namespace Geopilot.Api.Models;
 /// and kept independently of the job's retention, so it survives restarts and cleanup. No execution path
 /// reads it back to make decisions (see ADR 0010).
 /// </summary>
-public class PipelineRun
+public class Recording
 {
     /// <summary>
-    /// The unique identifier for the run record.
+    /// The unique identifier for the recording.
     /// </summary>
     public int Id { get; set; }
 
@@ -34,12 +34,12 @@ public class PipelineRun
     public string Definition { get; set; } = string.Empty;
 
     /// <summary>
-    /// The application version that executed the run.
+    /// The application version that executed the job.
     /// </summary>
     public string AppVersion { get; set; } = string.Empty;
 
     /// <summary>
-    /// The mandate the run was started for. Nullable because the protocol outlives everything else:
+    /// The mandate the job was started for. Nullable because the protocol outlives everything else:
     /// a record must remain writable even if no mandate can be attached.
     /// </summary>
     public int? MandateId { get; set; }
@@ -50,7 +50,7 @@ public class PipelineRun
     public Mandate? Mandate { get; set; }
 
     /// <summary>
-    /// The user that started the run, or <see langword="null"/> when the job was started anonymously on a
+    /// The user that started the job, or <see langword="null"/> when the job was started anonymously on a
     /// public mandate. Anonymous users may process but not deliver; who declared the delivery is recorded
     /// on the <see cref="Delivery"/> itself, reachable via <see cref="JobId"/>.
     /// </summary>
@@ -62,7 +62,7 @@ public class PipelineRun
     public User? User { get; set; }
 
     /// <summary>
-    /// The machine client that started the run, or <see langword="null"/> when a user or an anonymous caller
+    /// The machine client that started the job, or <see langword="null"/> when a user or an anonymous caller
     /// did. Never set together with <see cref="UserId"/>, which the database enforces.
     /// </summary>
     public int? MachineClientId { get; set; }
@@ -73,20 +73,20 @@ public class PipelineRun
     public MachineClient? MachineClient { get; set; }
 
     /// <summary>
-    /// The kind of client that started the run, classified from the request (never the raw header).
+    /// The kind of client that started the job, classified from the request (never the raw header).
     /// Makes unattended machine deliveries countable (re-evaluation trigger of ADR 0010).
     /// </summary>
     public ClientKind ClientKind { get; set; }
 
     /// <summary>
-    /// Whether the run can ever become a delivery, decided when its job started (see
-    /// <see cref="Processing.ProcessingJob.IsDeclarable"/>). <see langword="null"/> for a run recorded before the
+    /// Whether the job can ever become a delivery, decided when its job started (see
+    /// <see cref="Processing.ProcessingJob.IsDeclarable"/>). <see langword="null"/> for a recording written before the
     /// protocol kept it: unknown, which is not the same as not declarable.
     /// </summary>
     public Declarability? Declarability { get; set; }
 
     /// <summary>
-    /// The id of the upload whose files the run processed.
+    /// The id of the upload whose files the job processed.
     /// </summary>
     public Guid UploadId { get; set; }
 
@@ -118,7 +118,7 @@ public class PipelineRun
     public string? ScanDetails { get; set; }
 
     /// <summary>
-    /// The state the job ended in. <see langword="null"/> means the run never reached a terminal state:
+    /// The state the job ended in. <see langword="null"/> means the job never reached a terminal state:
     /// the instance died while it ran (restart victim), or the terminal write itself failed. Both read
     /// as "outcome unknown".
     /// </summary>
@@ -130,15 +130,15 @@ public class PipelineRun
     public DateTime? TerminalAt { get; set; }
 
     /// <summary>
-    /// Why the run failed or was cancelled, when known (e.g. the preflight failure reason, a job
+    /// Why the job failed or was cancelled, when known (e.g. the preflight failure reason, a job
     /// timeout, or a host shutdown).
     /// </summary>
     public string? FailureReason { get; set; }
 
     /// <summary>
-    /// Why geopilot could not declare the delivery of a machine delivery although the run allowed it, as the caller
+    /// Why geopilot could not declare the delivery of a machine delivery although the job allowed it, as the caller
     /// of the attempt reads it. <see langword="null"/> when geopilot declared it or had nothing to declare, and unknown
-    /// for a run without <see cref="Declarability"/>. Whether a delivery exists is not kept here: the delivery itself
+    /// for a recording without <see cref="Declarability"/>. Whether a delivery exists is not kept here: the delivery itself
     /// is the record of that, reachable via <see cref="JobId"/>.
     /// </summary>
     public string? DeclarationFailure { get; set; }
@@ -146,15 +146,15 @@ public class PipelineRun
     /// <summary>
     /// The manifest of the uploaded files.
     /// </summary>
-    public List<PipelineRunFile> Files { get; set; } = new();
+    public List<RecordingFile> Files { get; set; } = new();
 
     /// <summary>
-    /// The per-step records of the run.
+    /// The per-step records of the recording.
     /// </summary>
-    public List<PipelineRunStep> Steps { get; set; } = new();
+    public List<RecordingStep> Steps { get; set; } = new();
 
     /// <summary>
-    /// What happened to the reactions of the delivery the run produced.
+    /// What happened to the reactions of the delivery the job produced.
     /// </summary>
-    public List<PipelineRunReactionEvent> ReactionEvents { get; set; } = new();
+    public List<RecordingReactionEvent> ReactionEvents { get; set; } = new();
 }

@@ -760,300 +760,6 @@ export type Organisation = {
 };
 
 /**
- * One artifact a step produced.
- */
-export type PipelineRunArtifactResponse = {
-  kind: ArtifactKind;
-  /**
-   * The human-readable original file name.
-   */
-  originalFileName: string;
-  /**
-   * The file name it was persisted under.
-   */
-  persistedFileName: string;
-  /**
-   * For a delivery file: whether it entered the pipeline as an upload.
-   */
-  fromUpload?: boolean | null;
-};
-
-/**
- * The evaluation result of one step condition.
- */
-export type PipelineRunConditionResponse = {
-  /**
-   * The stable identifier from the pipeline definition, when configured.
-   */
-  conditionId?: string | null;
-  phase: ConditionPhase;
-  kind: ConditionKind;
-  /**
-   * The evaluated boolean expression.
-   */
-  expression: string;
-  /**
-   * Whether the expression evaluated to true.
-   */
-  matched: boolean;
-  /**
-   * The values the expression referenced, rendered per parameter name.
-   */
-  evaluatedValues?: {
-    [key: string]: string | null;
-  } | null;
-};
-
-/**
- * One uploaded file of the run.
- */
-export type PipelineRunFileResponse = {
-  /**
-   * The original file name as uploaded.
-   */
-  fileName: string;
-  /**
-   * The storage key relative to the run's storage location.
-   */
-  storageKey: string;
-  /**
-   * The file size in bytes as declared and verified by the preflight.
-   */
-  declaredSize: number;
-  /**
-   * The SHA-256 of the content as lowercase hex, when the file was scanned.
-   */
-  sha256?: string | null;
-};
-
-/**
- * One value a step's process was given when it started: an element bound to a parameter of its run method, or a file
- * the process configuration supplied to its constructor.
- */
-export type PipelineRunInputResponse = {
-  /**
-   * The name of the run method parameter, or of the constructor parameter for a configured file.
-   */
-  parameter: string;
-  origin: InputOrigin;
-  /**
-   * The referenced output as `stepId.Property`, or for a resource or a configured file its path below the resources directory.
-   */
-  reference?: string | null;
-  kind: InputKind;
-  /**
-   * For a value its text, formatted with the invariant culture and cut after 500 characters.
-   */
-  value?: string | null;
-  /**
-   * For a file its original name.
-   */
-  fileName?: string | null;
-  /**
-   * For a file its size in bytes, when known.
-   */
-  size?: number | null;
-  /**
-   * The SHA-256 of a file as lowercase hex: for an upload when it was scanned, for a resource or a configured file always. Files of an earlier step carry none.
-   */
-  sha256?: string | null;
-  /**
-   * For a file whether it is an uploaded file passed on unchanged.
-   */
-  fromUpload?: boolean | null;
-};
-
-/**
- * Something that happened to a reaction of the delivery the run produced. An attempt with the state
- * Geopilot.Api.Models.ReactionState.Running and no Geopilot.Api.Contracts.PipelineRunReactionEventResponse.FinishedAt whose instance has stopped never reported back:
- * its outcome is unknown.
- */
-export type PipelineRunReactionEventResponse = {
-  /**
-   * The id of the delivery the reaction belongs to.
-   */
-  deliveryId: number;
-  /**
-   * The id of the reaction in its set.
-   */
-  reactionId: string;
-  reactionKind: ReactionKind;
-  /**
-   * The channel that runs the reaction.
-   */
-  implementation: string;
-  event: ReactionEvent;
-  /**
-   * The number of the attempt.
-   */
-  attempt?: number | null;
-  /**
-   * When it happened (UTC); for an attempt, when it started.
-   */
-  occurredAt: string;
-  /**
-   * When the attempt reported back (UTC).
-   */
-  finishedAt?: string | null;
-  state?: ReactionState;
-  /**
-   * What the channel reported, or why the attempt failed.
-   */
-  message?: {
-    [key: string]: string;
-  } | null;
-  /**
-   * The user who caused the event, such as the one who deleted the delivery, or null when the application did.
-   */
-  userId?: number | null;
-};
-
-/**
- * The execution protocol of one processing job: what ran, on which definition version, for whom, and how
- * it ended. A Geopilot.Api.Contracts.PipelineRunResponse.TerminalState of null means the outcome is unknown, the
- * instance died while the job ran. The definition snapshot itself is served by its own endpoint.
- */
-export type PipelineRunResponse = {
-  /**
-   * The id of the processing job.
-   */
-  jobId: string;
-  /**
-   * The id of the pipeline that ran.
-   */
-  pipelineId: string;
-  /**
-   * The application version that executed the run.
-   */
-  appVersion: string;
-  /**
-   * The mandate the run was started for.
-   */
-  mandateId?: number | null;
-  /**
-   * The user that started the run, or null when a machine client started it or the job was started anonymously. Who declared the delivery is recorded on the delivery itself.
-   */
-  userId?: number | null;
-  /**
-   * The machine client that started the run, or null when a user started it or the job was started anonymously.
-   */
-  machineClientId?: number | null;
-  clientKind: ClientKind;
-  declarability?: Declarability;
-  /**
-   * The id of the upload the run processed.
-   */
-  uploadId: string;
-  /**
-   * Where the uploaded files were stored, credential-free.
-   */
-  uploadStorageLocation: string;
-  /**
-   * When the upload session was initiated (UTC).
-   */
-  uploadInitiatedAt: string;
-  /**
-   * When the job was started (UTC).
-   */
-  startedAt: string;
-  scanState: ScanState;
-  /**
-   * Details of a detected threat, when the scan found one.
-   */
-  scanDetails?: string | null;
-  terminalState?: ProcessingState;
-  /**
-   * When the job reached its terminal state (UTC).
-   */
-  terminalAt?: string | null;
-  /**
-   * Why the run failed or was cancelled, when known.
-   */
-  failureReason?: string | null;
-  /**
-   * Why geopilot could not declare the delivery of a machine delivery although the run allowed it.
-   */
-  declarationFailure?: string | null;
-  /**
-   * The manifest of the uploaded files.
-   */
-  files: Array<PipelineRunFileResponse>;
-  /**
-   * The per-step records, in pipeline order.
-   */
-  steps: Array<PipelineRunStepResponse>;
-  /**
-   * What happened to the reactions of the delivery the run produced, in the order it happened.
-   */
-  reactionEvents: Array<PipelineRunReactionEventResponse>;
-};
-
-/**
- * The protocol record of one pipeline step.
- */
-export type PipelineRunStepResponse = {
-  /**
-   * The step id from the pipeline definition.
-   */
-  stepId: string;
-  /**
-   * The step's localized display name.
-   */
-  displayName: {
-    [key: string]: string;
-  };
-  /**
-   * The fully qualified type name of the process implementation.
-   */
-  processImplementation: string;
-  /**
-   * The assembly the implementation came from.
-   */
-  processAssemblyName?: string | null;
-  /**
-   * The version of that assembly.
-   */
-  processAssemblyVersion?: string | null;
-  state: StepState;
-  /**
-   * When the pipeline reached the step (UTC).
-   */
-  startedAt?: string | null;
-  /**
-   * When the step finished (UTC).
-   */
-  finishedAt?: string | null;
-  /**
-   * The message of the exception that failed or cancelled the step.
-   */
-  errorMessage?: string | null;
-  /**
-   * The localized status message the process emitted.
-   */
-  statusMessage?: {
-    [key: string]: string;
-  } | null;
-  /**
-   * The localized message of the conditions that determined the state.
-   */
-  conditionMessage?: {
-    [key: string]: string;
-  } | null;
-  /**
-   * What the step's process was given when it started, in the order of its parameters; empty for a step that ran no process.
-   */
-  inputs: Array<PipelineRunInputResponse>;
-  /**
-   * The evaluation result of every checked condition, matching or not.
-   */
-  conditions: Array<PipelineRunConditionResponse>;
-  /**
-   * The artifacts the step produced, by name.
-   */
-  artifacts: Array<PipelineRunArtifactResponse>;
-};
-
-/**
  * Represents a summary of a pipeline.
  */
 export type PipelineSummary = {
@@ -1187,6 +893,300 @@ export const ReactionState = {
  * not processing it.
  */
 export type ReactionState = (typeof ReactionState)[keyof typeof ReactionState];
+
+/**
+ * One artifact a step produced.
+ */
+export type RecordingArtifactResponse = {
+  kind: ArtifactKind;
+  /**
+   * The human-readable original file name.
+   */
+  originalFileName: string;
+  /**
+   * The file name it was persisted under.
+   */
+  persistedFileName: string;
+  /**
+   * For a delivery file: whether it entered the pipeline as an upload.
+   */
+  fromUpload?: boolean | null;
+};
+
+/**
+ * The evaluation result of one step condition.
+ */
+export type RecordingConditionResponse = {
+  /**
+   * The stable identifier from the pipeline definition, when configured.
+   */
+  conditionId?: string | null;
+  phase: ConditionPhase;
+  kind: ConditionKind;
+  /**
+   * The evaluated boolean expression.
+   */
+  expression: string;
+  /**
+   * Whether the expression evaluated to true.
+   */
+  matched: boolean;
+  /**
+   * The values the expression referenced, rendered per parameter name.
+   */
+  evaluatedValues?: {
+    [key: string]: string | null;
+  } | null;
+};
+
+/**
+ * One uploaded file of the recording.
+ */
+export type RecordingFileResponse = {
+  /**
+   * The original file name as uploaded.
+   */
+  fileName: string;
+  /**
+   * The storage key relative to the recording's storage location.
+   */
+  storageKey: string;
+  /**
+   * The file size in bytes as declared and verified by the preflight.
+   */
+  declaredSize: number;
+  /**
+   * The SHA-256 of the content as lowercase hex, when the file was scanned.
+   */
+  sha256?: string | null;
+};
+
+/**
+ * One value a step's process was given when it started: an element bound to a parameter of its run method, or a file
+ * the process configuration supplied to its constructor.
+ */
+export type RecordingInputResponse = {
+  /**
+   * The name of the run method parameter, or of the constructor parameter for a configured file.
+   */
+  parameter: string;
+  origin: InputOrigin;
+  /**
+   * The referenced output as `stepId.Property`, or for a resource or a configured file its path below the resources directory.
+   */
+  reference?: string | null;
+  kind: InputKind;
+  /**
+   * For a value its text, formatted with the invariant culture and cut after 500 characters.
+   */
+  value?: string | null;
+  /**
+   * For a file its original name.
+   */
+  fileName?: string | null;
+  /**
+   * For a file its size in bytes, when known.
+   */
+  size?: number | null;
+  /**
+   * The SHA-256 of a file as lowercase hex: for an upload when it was scanned, for a resource or a configured file always. Files of an earlier step carry none.
+   */
+  sha256?: string | null;
+  /**
+   * For a file whether it is an uploaded file passed on unchanged.
+   */
+  fromUpload?: boolean | null;
+};
+
+/**
+ * Something that happened to a reaction of the delivery the job produced. An attempt with the state
+ * Geopilot.Api.Models.ReactionState.Running and no Geopilot.Api.Contracts.RecordingReactionEventResponse.FinishedAt whose instance has stopped never reported back:
+ * its outcome is unknown.
+ */
+export type RecordingReactionEventResponse = {
+  /**
+   * The id of the delivery the reaction belongs to.
+   */
+  deliveryId: number;
+  /**
+   * The id of the reaction in its set.
+   */
+  reactionId: string;
+  reactionKind: ReactionKind;
+  /**
+   * The channel that runs the reaction.
+   */
+  implementation: string;
+  event: ReactionEvent;
+  /**
+   * The number of the attempt.
+   */
+  attempt?: number | null;
+  /**
+   * When it happened (UTC); for an attempt, when it started.
+   */
+  occurredAt: string;
+  /**
+   * When the attempt reported back (UTC).
+   */
+  finishedAt?: string | null;
+  state?: ReactionState;
+  /**
+   * What the channel reported, or why the attempt failed.
+   */
+  message?: {
+    [key: string]: string;
+  } | null;
+  /**
+   * The user who caused the event, such as the one who deleted the delivery, or null when the application did.
+   */
+  userId?: number | null;
+};
+
+/**
+ * The execution protocol of one processing job: what ran, on which definition version, for whom, and how
+ * it ended. A Geopilot.Api.Contracts.RecordingResponse.TerminalState of null means the outcome is unknown, the
+ * instance died while the job ran. The definition snapshot itself is served by its own endpoint.
+ */
+export type RecordingResponse = {
+  /**
+   * The id of the processing job.
+   */
+  jobId: string;
+  /**
+   * The id of the pipeline that ran.
+   */
+  pipelineId: string;
+  /**
+   * The application version that executed the job.
+   */
+  appVersion: string;
+  /**
+   * The mandate the job was started for.
+   */
+  mandateId?: number | null;
+  /**
+   * The user that started the job, or null when a machine client started it or the job was started anonymously. Who declared the delivery is recorded on the delivery itself.
+   */
+  userId?: number | null;
+  /**
+   * The machine client that started the job, or null when a user started it or the job was started anonymously.
+   */
+  machineClientId?: number | null;
+  clientKind: ClientKind;
+  declarability?: Declarability;
+  /**
+   * The id of the upload the job processed.
+   */
+  uploadId: string;
+  /**
+   * Where the uploaded files were stored, credential-free.
+   */
+  uploadStorageLocation: string;
+  /**
+   * When the upload session was initiated (UTC).
+   */
+  uploadInitiatedAt: string;
+  /**
+   * When the job was started (UTC).
+   */
+  startedAt: string;
+  scanState: ScanState;
+  /**
+   * Details of a detected threat, when the scan found one.
+   */
+  scanDetails?: string | null;
+  terminalState?: ProcessingState;
+  /**
+   * When the job reached its terminal state (UTC).
+   */
+  terminalAt?: string | null;
+  /**
+   * Why the job failed or was cancelled, when known.
+   */
+  failureReason?: string | null;
+  /**
+   * Why geopilot could not declare the delivery of a machine delivery although the job allowed it.
+   */
+  declarationFailure?: string | null;
+  /**
+   * The manifest of the uploaded files.
+   */
+  files: Array<RecordingFileResponse>;
+  /**
+   * The per-step records, in pipeline order.
+   */
+  steps: Array<RecordingStepResponse>;
+  /**
+   * What happened to the reactions of the delivery the job produced, in the order it happened.
+   */
+  reactionEvents: Array<RecordingReactionEventResponse>;
+};
+
+/**
+ * The protocol record of one pipeline step.
+ */
+export type RecordingStepResponse = {
+  /**
+   * The step id from the pipeline definition.
+   */
+  stepId: string;
+  /**
+   * The step's localized display name.
+   */
+  displayName: {
+    [key: string]: string;
+  };
+  /**
+   * The fully qualified type name of the process implementation.
+   */
+  processImplementation: string;
+  /**
+   * The assembly the implementation came from.
+   */
+  processAssemblyName?: string | null;
+  /**
+   * The version of that assembly.
+   */
+  processAssemblyVersion?: string | null;
+  state: StepState;
+  /**
+   * When the pipeline reached the step (UTC).
+   */
+  startedAt?: string | null;
+  /**
+   * When the step finished (UTC).
+   */
+  finishedAt?: string | null;
+  /**
+   * The message of the exception that failed or cancelled the step.
+   */
+  errorMessage?: string | null;
+  /**
+   * The localized status message the process emitted.
+   */
+  statusMessage?: {
+    [key: string]: string;
+  } | null;
+  /**
+   * The localized message of the conditions that determined the state.
+   */
+  conditionMessage?: {
+    [key: string]: string;
+  } | null;
+  /**
+   * What the step's process was given when it started, in the order of its parameters; empty for a step that ran no process.
+   */
+  inputs: Array<RecordingInputResponse>;
+  /**
+   * The evaluation result of every checked condition, matching or not.
+   */
+  conditions: Array<RecordingConditionResponse>;
+  /**
+   * The artifacts the step produced, by name.
+   */
+  artifacts: Array<RecordingArtifactResponse>;
+};
 
 /**
  * The outcome of the malware scan of a run's uploaded files. Persisted as text.
@@ -2315,68 +2315,6 @@ export type GetApiV1PipelineResponses = {
 
 export type GetApiV1PipelineResponse = GetApiV1PipelineResponses[keyof GetApiV1PipelineResponses];
 
-export type GetApiV1PipelineRunByJobIdData = {
-  body?: never;
-  path: {
-    jobId: string;
-  };
-  query?: never;
-  url: "/api/v1/PipelineRun/{jobId}";
-};
-
-export type GetApiV1PipelineRunByJobIdErrors = {
-  /**
-   * The server cannot process the request due to invalid or malformed request.
-   */
-  400: ValidationProblemDetails;
-  /**
-   * No execution protocol exists for the specified jobId.
-   */
-  404: ProblemDetails;
-};
-
-export type GetApiV1PipelineRunByJobIdError = GetApiV1PipelineRunByJobIdErrors[keyof GetApiV1PipelineRunByJobIdErrors];
-
-export type GetApiV1PipelineRunByJobIdResponses = {
-  /**
-   * The execution protocol of the job.
-   */
-  200: PipelineRunResponse;
-};
-
-export type GetApiV1PipelineRunByJobIdResponse =
-  GetApiV1PipelineRunByJobIdResponses[keyof GetApiV1PipelineRunByJobIdResponses];
-
-export type GetApiV1PipelineRunByJobIdDefinitionData = {
-  body?: never;
-  path: {
-    jobId: string;
-  };
-  query?: never;
-  url: "/api/v1/PipelineRun/{jobId}/definition";
-};
-
-export type GetApiV1PipelineRunByJobIdDefinitionErrors = {
-  /**
-   * The server cannot process the request due to invalid or malformed request.
-   */
-  400: ValidationProblemDetails;
-  /**
-   * No execution protocol exists for the specified jobId.
-   */
-  404: ProblemDetails;
-};
-
-export type GetApiV1PipelineRunByJobIdDefinitionError =
-  GetApiV1PipelineRunByJobIdDefinitionErrors[keyof GetApiV1PipelineRunByJobIdDefinitionErrors];
-
-export type GetApiV1PipelineRunByJobIdDefinitionResponses = {
-  /**
-   * The definition snapshot the job executed on.
-   */
-  200: unknown;
-};
-
 export type GetApiV2ProcessingData = {
   body?: never;
   path?: never;
@@ -2523,6 +2461,68 @@ export type GetVisualizationResponses = {
 };
 
 export type GetVisualizationResponse = GetVisualizationResponses[keyof GetVisualizationResponses];
+
+export type GetApiV1RecordingByJobIdData = {
+  body?: never;
+  path: {
+    jobId: string;
+  };
+  query?: never;
+  url: "/api/v1/Recording/{jobId}";
+};
+
+export type GetApiV1RecordingByJobIdErrors = {
+  /**
+   * The server cannot process the request due to invalid or malformed request.
+   */
+  400: ValidationProblemDetails;
+  /**
+   * No execution protocol exists for the specified jobId.
+   */
+  404: ProblemDetails;
+};
+
+export type GetApiV1RecordingByJobIdError = GetApiV1RecordingByJobIdErrors[keyof GetApiV1RecordingByJobIdErrors];
+
+export type GetApiV1RecordingByJobIdResponses = {
+  /**
+   * The execution protocol of the job.
+   */
+  200: RecordingResponse;
+};
+
+export type GetApiV1RecordingByJobIdResponse =
+  GetApiV1RecordingByJobIdResponses[keyof GetApiV1RecordingByJobIdResponses];
+
+export type GetApiV1RecordingByJobIdDefinitionData = {
+  body?: never;
+  path: {
+    jobId: string;
+  };
+  query?: never;
+  url: "/api/v1/Recording/{jobId}/definition";
+};
+
+export type GetApiV1RecordingByJobIdDefinitionErrors = {
+  /**
+   * The server cannot process the request due to invalid or malformed request.
+   */
+  400: ValidationProblemDetails;
+  /**
+   * No execution protocol exists for the specified jobId.
+   */
+  404: ProblemDetails;
+};
+
+export type GetApiV1RecordingByJobIdDefinitionError =
+  GetApiV1RecordingByJobIdDefinitionErrors[keyof GetApiV1RecordingByJobIdDefinitionErrors];
+
+export type GetApiV1RecordingByJobIdDefinitionResponses = {
+  /**
+   * The definition snapshot the job executed on.
+   */
+  200: unknown;
+};
 
 export type PostApiV1SubmissionData = {
   /**

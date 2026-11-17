@@ -2,10 +2,10 @@
 
 /// <summary>
 /// One artifact a pipeline step produced, by name: a user-facing download, a visualization config, or a
-/// delivery payload file. Kept in the protocol so "which artifacts existed for this run" stays answerable
+/// delivery payload file. Kept in the protocol so "which artifacts existed for this job" stays answerable
 /// after the files themselves are cleaned up.
 /// </summary>
-public class PipelineRunArtifact
+public class RecordingArtifact
 {
     /// <summary>
     /// The unique identifier for the artifact record.
@@ -15,12 +15,12 @@ public class PipelineRunArtifact
     /// <summary>
     /// The step record this artifact belongs to.
     /// </summary>
-    public int PipelineRunStepId { get; set; }
+    public int RecordingStepId { get; set; }
 
     /// <summary>
     /// Navigation to the step record.
     /// </summary>
-    public PipelineRunStep Step { get; set; } = null!;
+    public RecordingStep Step { get; set; } = null!;
 
     /// <summary>
     /// What the artifact is: a download, a visualization config, or a delivery payload file.
