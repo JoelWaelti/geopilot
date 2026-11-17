@@ -11,13 +11,13 @@ namespace Geopilot.Api.Contracts;
 /// </summary>
 /// <param name="JobId">The id of the processing job.</param>
 /// <param name="PipelineId">The id of the pipeline that ran.</param>
-/// <param name="AppVersion">The application version that executed the run.</param>
-/// <param name="MandateId">The mandate the run was started for.</param>
-/// <param name="UserId">The user that started the run, or <see langword="null"/> when a machine client started it or the job was started anonymously. Who declared the delivery is recorded on the delivery itself.</param>
-/// <param name="MachineClientId">The machine client that started the run, or <see langword="null"/> when a user started it or the job was started anonymously.</param>
-/// <param name="ClientKind">The kind of client that started the run.</param>
-/// <param name="Declarability">Whether the run could become a delivery, decided when it started, or <see langword="null"/> for a run recorded before the protocol kept it.</param>
-/// <param name="UploadId">The id of the upload the run processed.</param>
+/// <param name="AppVersion">The application version that executed the job.</param>
+/// <param name="MandateId">The mandate the job was started for.</param>
+/// <param name="UserId">The user that started the job, or <see langword="null"/> when a machine client started it or the job was started anonymously. Who declared the delivery is recorded on the delivery itself.</param>
+/// <param name="MachineClientId">The machine client that started the job, or <see langword="null"/> when a user started it or the job was started anonymously.</param>
+/// <param name="ClientKind">The kind of client that started the job.</param>
+/// <param name="Declarability">Whether the job could become a delivery, decided when it started, or <see langword="null"/> for a recording written before the protocol kept it.</param>
+/// <param name="UploadId">The id of the upload the job processed.</param>
 /// <param name="UploadStorageLocation">Where the uploaded files were stored, credential-free.</param>
 /// <param name="UploadInitiatedAt">When the upload session was initiated (UTC).</param>
 /// <param name="StartedAt">When the job was started (UTC).</param>
@@ -25,12 +25,12 @@ namespace Geopilot.Api.Contracts;
 /// <param name="ScanDetails">Details of a detected threat, when the scan found one.</param>
 /// <param name="TerminalState">The state the job ended in, or <see langword="null"/> when the outcome is unknown.</param>
 /// <param name="TerminalAt">When the job reached its terminal state (UTC).</param>
-/// <param name="FailureReason">Why the run failed or was cancelled, when known.</param>
-/// <param name="DeclarationFailure">Why geopilot could not declare the delivery of a machine delivery although the run allowed it.</param>
+/// <param name="FailureReason">Why the job failed or was cancelled, when known.</param>
+/// <param name="DeclarationFailure">Why geopilot could not declare the delivery of a machine delivery although the job allowed it.</param>
 /// <param name="Files">The manifest of the uploaded files.</param>
 /// <param name="Steps">The per-step records, in pipeline order.</param>
-/// <param name="ReactionEvents">What happened to the reactions of the delivery the run produced, in the order it happened.</param>
-public record PipelineRunResponse(
+/// <param name="ReactionEvents">What happened to the reactions of the delivery the job produced, in the order it happened.</param>
+public record RecordingResponse(
     Guid JobId,
     string PipelineId,
     string AppVersion,
@@ -49,18 +49,18 @@ public record PipelineRunResponse(
     DateTime? TerminalAt,
     string? FailureReason,
     string? DeclarationFailure,
-    List<PipelineRunFileResponse> Files,
-    List<PipelineRunStepResponse> Steps,
-    List<PipelineRunReactionEventResponse> ReactionEvents);
+    List<RecordingFileResponse> Files,
+    List<RecordingStepResponse> Steps,
+    List<RecordingReactionEventResponse> ReactionEvents);
 
 /// <summary>
-/// One uploaded file of the run.
+/// One uploaded file of the recording.
 /// </summary>
 /// <param name="FileName">The original file name as uploaded.</param>
-/// <param name="StorageKey">The storage key relative to the run's storage location.</param>
+/// <param name="StorageKey">The storage key relative to the recording's storage location.</param>
 /// <param name="DeclaredSize">The file size in bytes as declared and verified by the preflight.</param>
 /// <param name="Sha256">The SHA-256 of the content as lowercase hex, when the file was scanned.</param>
-public record PipelineRunFileResponse(
+public record RecordingFileResponse(
     string FileName,
     string StorageKey,
     long DeclaredSize,
@@ -83,7 +83,7 @@ public record PipelineRunFileResponse(
 /// <param name="Inputs">What the step's process was given when it started, in the order of its parameters; empty for a step that ran no process.</param>
 /// <param name="Conditions">The evaluation result of every checked condition, matching or not.</param>
 /// <param name="Artifacts">The artifacts the step produced, by name.</param>
-public record PipelineRunStepResponse(
+public record RecordingStepResponse(
     string StepId,
     LocalizedText DisplayName,
     string ProcessImplementation,
@@ -95,9 +95,9 @@ public record PipelineRunStepResponse(
     string? ErrorMessage,
     LocalizedText? StatusMessage,
     LocalizedText? ConditionMessage,
-    List<PipelineRunInputResponse> Inputs,
-    List<PipelineRunConditionResponse> Conditions,
-    List<PipelineRunArtifactResponse> Artifacts);
+    List<RecordingInputResponse> Inputs,
+    List<RecordingConditionResponse> Conditions,
+    List<RecordingArtifactResponse> Artifacts);
 
 /// <summary>
 /// One value a step's process was given when it started: an element bound to a parameter of its run method, or a file
@@ -112,7 +112,7 @@ public record PipelineRunStepResponse(
 /// <param name="Size">For a file its size in bytes, when known.</param>
 /// <param name="Sha256">The SHA-256 of a file as lowercase hex: for an upload when it was scanned, for a resource or a configured file always. Files of an earlier step carry none.</param>
 /// <param name="FromUpload">For a file whether it is an uploaded file passed on unchanged.</param>
-public record PipelineRunInputResponse(
+public record RecordingInputResponse(
     string Parameter,
     InputOrigin Origin,
     string? Reference,
@@ -132,7 +132,7 @@ public record PipelineRunInputResponse(
 /// <param name="Expression">The evaluated boolean expression.</param>
 /// <param name="Matched">Whether the expression evaluated to true.</param>
 /// <param name="EvaluatedValues">The values the expression referenced, rendered per parameter name.</param>
-public record PipelineRunConditionResponse(
+public record RecordingConditionResponse(
     string? ConditionId,
     ConditionPhase Phase,
     ConditionKind Kind,
@@ -147,14 +147,14 @@ public record PipelineRunConditionResponse(
 /// <param name="OriginalFileName">The human-readable original file name.</param>
 /// <param name="PersistedFileName">The file name it was persisted under.</param>
 /// <param name="FromUpload">For a delivery file: whether it entered the pipeline as an upload.</param>
-public record PipelineRunArtifactResponse(
+public record RecordingArtifactResponse(
     ArtifactKind Kind,
     string OriginalFileName,
     string PersistedFileName,
     bool? FromUpload);
 
 /// <summary>
-/// Something that happened to a reaction of the delivery the run produced. An attempt with the state
+/// Something that happened to a reaction of the delivery the job produced. An attempt with the state
 /// <see cref="ReactionState.Running"/> and no <see cref="FinishedAt"/> whose instance has stopped never reported back:
 /// its outcome is unknown.
 /// </summary>
@@ -169,7 +169,7 @@ public record PipelineRunArtifactResponse(
 /// <param name="State">The state of the reaction afterwards, or <see langword="null"/> when the attempt no longer held its reaction once it reported.</param>
 /// <param name="Message">What the channel reported, or why the attempt failed.</param>
 /// <param name="UserId">The user who caused the event, such as the one who deleted the delivery, or <see langword="null"/> when the application did.</param>
-public record PipelineRunReactionEventResponse(
+public record RecordingReactionEventResponse(
     int DeliveryId,
     string ReactionId,
     ReactionKind ReactionKind,

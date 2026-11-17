@@ -6,18 +6,18 @@ using Geopilot.PipelineCore.Pipeline;
 namespace Geopilot.Api.Processing;
 
 /// <summary>
-/// Writes the execution protocol (<see cref="PipelineRun"/> and children) while a job runs.
+/// Writes the execution protocol (<see cref="Recording"/> and children) while a job runs.
 ///
 /// Two write policies on purpose: <see cref="RecordJobStartedAsync"/> is hard and throws when the record
 /// cannot be written, because a job we cannot account for must not be accepted. Every later method is
 /// soft: it catches all its own errors and logs a warning, because a protocol failure must not tear down
-/// a running pipeline. A run whose terminal write failed keeps a null terminal state and reads as
+/// a running pipeline. A recording whose terminal write failed keeps a null terminal state and reads as
 /// "outcome unknown", indistinguishable from a restart victim, which is the honest answer.
 /// </summary>
-public interface IPipelineRunRecorder
+public interface IRecorder
 {
     /// <summary>
-    /// Writes the run record including the definition snapshot and the upload manifest. Hard: an exception
+    /// Writes the recording including the definition snapshot and the upload manifest. Hard: an exception
     /// here means no record, and the caller must not start the job.
     /// </summary>
     /// <param name="job">The created job with its pipeline attached.</param>
@@ -34,7 +34,7 @@ public interface IPipelineRunRecorder
     Task RecordScanOutcomeAsync(Guid jobId, Services.ScanResult scanResult);
 
     /// <summary>
-    /// Marks the run as failed before its pipeline ever ran (preflight failure). Soft.
+    /// Marks the recording as failed before its pipeline ever ran (preflight failure). Soft.
     /// </summary>
     /// <param name="jobId">The job whose preflight failed.</param>
     /// <param name="failureReason">Why the preflight failed.</param>
@@ -70,25 +70,25 @@ public interface IPipelineRunRecorder
     Task RecordStepCompletedAsync(Guid jobId, IPipelineStep pipelineStep, int order);
 
     /// <summary>
-    /// Writes the run's terminal state and reconciles every step row: steps that threw or were never
+    /// Writes the recording's terminal state and reconciles every step row: steps that threw or were never
     /// reached get their row here, and delivery artifacts extracted after the last step are added. Soft.
     /// </summary>
     /// <param name="jobId">The finished job.</param>
     /// <param name="steps">All steps of the pipeline, in pipeline order.</param>
     /// <param name="terminalState">The state the job ended in.</param>
-    /// <param name="failureReason">Why the run failed or was cancelled, when known.</param>
+    /// <param name="failureReason">Why the job failed or was cancelled, when known.</param>
     /// <param name="cancellationToken">Bounds the write; a cancelled write is logged like any other failed one.</param>
     Task RecordRunFinishedAsync(Guid jobId, IReadOnlyList<IPipelineStep> steps, ProcessingState terminalState, string? failureReason, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Records why geopilot could not declare the delivery of a machine delivery although the run allowed it. Soft.
+    /// Records why geopilot could not declare the delivery of a machine delivery although the job allowed it. Soft.
     /// </summary>
     /// <param name="jobId">The job whose delivery could not be declared.</param>
     /// <param name="reason">Why the declaration failed, as the caller of the attempt reads it.</param>
     Task RecordDeclarationFailedAsync(Guid jobId, string reason);
 
     /// <summary>
-    /// Writes the row of an attempt of a reaction the moment an instance claims it, into the run its delivery comes
+    /// Writes the row of an attempt of a reaction the moment an instance claims it, into the recording its delivery comes
     /// from, so an attempt whose instance stopped shows as running. Soft.
     /// </summary>
     /// <param name="reaction">The claimed reaction.</param>

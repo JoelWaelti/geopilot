@@ -171,8 +171,8 @@ public class ProcessingJobCleanupService : BackgroundService
             return 0;
 
         var cutoff = now - retention;
-        return await dbContext.PipelineRuns
-            .Where(run => run.StartedAt < cutoff)
+        return await dbContext.Recordings
+            .Where(recording => recording.StartedAt < cutoff)
             .ExecuteDeleteAsync();
     }
 

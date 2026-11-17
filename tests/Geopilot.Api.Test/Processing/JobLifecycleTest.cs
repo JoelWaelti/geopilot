@@ -28,7 +28,7 @@ public class JobLifecycleTest
     private ProcessingJobStore jobStore;
     private Mock<IPipelineFactory> pipelineFactory;
     private Channel<PreflightRequest> preflightQueue;
-    private PipelineRunRecorder recorder;
+    private Recorder recorder;
     private ServiceProvider services;
     private Mandate mandate;
     private Declarer declarer;
@@ -75,7 +75,7 @@ public class JobLifecycleTest
         preflightQueue = Channel.CreateUnbounded<PreflightRequest>();
         pipelineFactory = new Mock<IPipelineFactory>();
         pipelineFactory.Setup(f => f.GetDefinitionSnapshotJson(It.IsAny<string>())).Returns("{}");
-        recorder = new PipelineRunRecorder(context, pipelineFactory.Object, uploadStorage, Mock.Of<IHttpContextAccessor>(), Mock.Of<ILogger<PipelineRunRecorder>>());
+        recorder = new Recorder(context, pipelineFactory.Object, uploadStorage, Mock.Of<IHttpContextAccessor>(), Mock.Of<ILogger<Recorder>>());
 
         var orchestration = new UploadOrchestrationService(
             uploadStorage, Mock.Of<IUploadScanService>(), jobStore, uploadStore, AssemblyInitialize.TestDirectoryProvider, Options.Create(new UploadOptions()), Mock.Of<ILogger<UploadOrchestrationService>>());
@@ -87,7 +87,7 @@ public class JobLifecycleTest
             .ReturnsAsync(new DeliveryDeclarationResult(DeliveryDeclarationStatus.Created, DeliveryId: 42));
 
         services = new ServiceCollection()
-            .AddSingleton<IPipelineRunRecorder>(recorder)
+            .AddSingleton<IRecorder>(recorder)
             .AddSingleton<IUploadOrchestrationService>(orchestration)
             .AddSingleton(declarationService.Object)
             .BuildServiceProvider();
@@ -133,9 +133,9 @@ public class JobLifecycleTest
         Assert.IsTrue(preflightQueue.Reader.TryRead(out var request), "The preflight must be asked to check the job.");
         Assert.AreEqual(new PreflightRequest(job.Id, upload.Id), request);
 
-        var run = await ReadRunAsync(job.Id);
-        Assert.IsNull(run.TerminalState);
-        Assert.AreEqual(declarer.UserId, run.UserId, "The protocol must name who started the job.");
+        var recording = await ReadRecordingAsync(job.Id);
+        Assert.IsNull(recording.TerminalState);
+        Assert.AreEqual(declarer.UserId, recording.UserId, "The protocol must name who started the job.");
         AssertUploadKept(upload.Id, true);
         pipeline.Verify(p => p.Dispose(), Times.Never, "The run still needs the pipeline.");
     }
@@ -153,7 +153,7 @@ public class JobLifecycleTest
         // Both values, because a value fixed on the way to the job would pass with true alone.
         Assert.AreEqual(isDeclarable, job.IsDeclarable);
         Assert.AreEqual(isDeclarable, jobStore.GetJob(job.Id)!.IsDeclarable);
-        Assert.AreEqual(expectedDeclarability, (await ReadRunAsync(job.Id)).Declarability, "The protocol keeps it beyond the job's retention and a restart.");
+        Assert.AreEqual(expectedDeclarability, (await ReadRecordingAsync(job.Id)).Declarability, "The protocol keeps it beyond the job's retention and a restart.");
     }
 
     [TestMethod]
@@ -261,9 +261,9 @@ public class JobLifecycleTest
         AssertUploadKept(uploadId, !uploadReleased);
         declarationService.Verify(d => d.DeclareAsync(jobId, Fields, declarer, It.IsAny<CancellationToken>()), declared ? Times.Once() : Times.Never());
 
-        var run = await ReadRunAsync(jobId);
-        Assert.AreEqual(expectedState, run.TerminalState);
-        Assert.AreEqual(expectedReason, run.FailureReason);
+        var recording = await ReadRecordingAsync(jobId);
+        Assert.AreEqual(expectedState, recording.TerminalState);
+        Assert.AreEqual(expectedReason, recording.FailureReason);
 
         pipeline.Verify(p => p.Dispose(), Times.Once);
     }
@@ -283,9 +283,9 @@ public class JobLifecycleTest
         var job = jobStore.GetJob(jobId)!;
         Assert.AreEqual(ProcessingState.Success, job.State);
         Assert.AreEqual("The delivery could not be declared because of an unexpected error.", job.DeclarationFailure);
-        var run = await ReadRunAsync(jobId);
-        Assert.AreEqual(ProcessingState.Success, run.TerminalState);
-        Assert.AreEqual("The delivery could not be declared because of an unexpected error.", run.DeclarationFailure);
+        var recording = await ReadRecordingAsync(jobId);
+        Assert.AreEqual(ProcessingState.Success, recording.TerminalState);
+        Assert.AreEqual("The delivery could not be declared because of an unexpected error.", recording.DeclarationFailure);
         AssertUploadKept(uploadId, false);
         pipeline.Verify(p => p.Dispose(), Times.Once);
     }
@@ -305,7 +305,7 @@ public class JobLifecycleTest
         // failed declaration. Every other refusal is the one thing the caller of the attempt gets to read, and the
         // protocol keeps it beyond the job's retention.
         Assert.AreEqual(expectedFailure, jobStore.GetJob(jobId)!.DeclarationFailure);
-        Assert.AreEqual(expectedFailure, (await ReadRunAsync(jobId)).DeclarationFailure);
+        Assert.AreEqual(expectedFailure, (await ReadRecordingAsync(jobId)).DeclarationFailure);
     }
 
     [TestMethod]
@@ -341,7 +341,7 @@ public class JobLifecycleTest
 
         await lifecycle.RunFinishedAsync(pipeline.Object, new RunOutcome.Completed(ProcessingState.Failed), CancellationToken.None);
 
-        Assert.AreEqual(ProcessingState.Failed, (await ReadRunAsync(jobId)).TerminalState);
+        Assert.AreEqual(ProcessingState.Failed, (await ReadRecordingAsync(jobId)).TerminalState);
         AssertUploadKept(uploadId, false);
     }
 
@@ -374,9 +374,9 @@ public class JobLifecycleTest
         Assert.IsTrue(jobStore.ProcessingQueue.TryRead(out var workItem), "The job must be queued for its run.");
         Assert.AreSame(pipeline.Object, workItem.Pipeline);
 
-        var run = await ReadRunAsync(jobId);
-        Assert.AreEqual(ScanState.Clean, run.ScanState);
-        Assert.IsNull(run.TerminalState);
+        var recording = await ReadRecordingAsync(jobId);
+        Assert.AreEqual(ScanState.Clean, recording.ScanState);
+        Assert.IsNull(recording.TerminalState);
 
         pipeline.Verify(p => p.Dispose(), Times.Never, "The run still needs the pipeline.");
     }
@@ -393,9 +393,9 @@ public class JobLifecycleTest
         Assert.IsNotNull(job.FinishedAt);
         AssertUploadKept(uploadId, false);
 
-        var run = await ReadRunAsync(jobId);
-        Assert.AreEqual(ProcessingState.Failed, run.TerminalState);
-        Assert.AreEqual("IncompleteUpload: File missing.", run.FailureReason);
+        var recording = await ReadRecordingAsync(jobId);
+        Assert.AreEqual(ProcessingState.Failed, recording.TerminalState);
+        Assert.AreEqual("IncompleteUpload: File missing.", recording.FailureReason);
 
         pipeline.Verify(p => p.Dispose(), Times.Once);
     }
@@ -407,9 +407,9 @@ public class JobLifecycleTest
 
         await lifecycle.PreflightFailedAsync(jobId, "ThreatDetected: The uploaded files could not be processed.", new ScanResult(false, "eicar.xtf: Win.Test.EICAR_HDB-1"));
 
-        var run = await ReadRunAsync(jobId);
-        Assert.AreEqual(ScanState.ThreatDetected, run.ScanState);
-        Assert.AreEqual("eicar.xtf: Win.Test.EICAR_HDB-1", run.ScanDetails);
+        var recording = await ReadRecordingAsync(jobId);
+        Assert.AreEqual(ScanState.ThreatDetected, recording.ScanState);
+        Assert.AreEqual("eicar.xtf: Win.Test.EICAR_HDB-1", recording.ScanDetails);
     }
 
     [TestMethod]
@@ -519,10 +519,10 @@ public class JobLifecycleTest
         Assert.AreEqual(kept, Directory.Exists(Path.Combine(uploadRoot, uploadId.ToString())), "uploaded files");
     }
 
-    private async Task<PipelineRun> ReadRunAsync(Guid jobId)
+    private async Task<Recording> ReadRecordingAsync(Guid jobId)
     {
         // Otherwise EF answers from what it tracks instead of what was written.
         context.ChangeTracker.Clear();
-        return await context.PipelineRuns.SingleAsync(r => r.JobId == jobId);
+        return await context.Recordings.SingleAsync(r => r.JobId == jobId);
     }
 }

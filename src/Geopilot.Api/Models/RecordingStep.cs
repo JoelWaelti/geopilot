@@ -4,11 +4,11 @@ using Geopilot.PipelineCore.Pipeline;
 namespace Geopilot.Api.Models;
 
 /// <summary>
-/// The protocol record of one pipeline step within a <see cref="PipelineRun"/>. Written when the pipeline
+/// The protocol record of one pipeline step within a <see cref="Recording"/>. Written when the pipeline
 /// reaches the step (state <see cref="StepState.Running"/>) and updated once with its terminal state, so a
 /// run interrupted by a restart shows which step was in flight.
 /// </summary>
-public class PipelineRunStep
+public class RecordingStep
 {
     /// <summary>
     /// The unique identifier for the step record.
@@ -16,14 +16,14 @@ public class PipelineRunStep
     public int Id { get; set; }
 
     /// <summary>
-    /// The run this step belongs to.
+    /// The recording this step belongs to.
     /// </summary>
-    public int PipelineRunId { get; set; }
+    public int RecordingId { get; set; }
 
     /// <summary>
-    /// Navigation to the run.
+    /// Navigation to the recording.
     /// </summary>
-    public PipelineRun PipelineRun { get; set; } = null!;
+    public Recording Recording { get; set; } = null!;
 
     /// <summary>
     /// The position of the step within the pipeline, starting at 0.
@@ -31,12 +31,12 @@ public class PipelineRunStep
     public int Order { get; set; }
 
     /// <summary>
-    /// The step id from the pipeline definition. Unique within the run.
+    /// The step id from the pipeline definition. Unique within the recording.
     /// </summary>
     public string StepId { get; set; } = string.Empty;
 
     /// <summary>
-    /// The step's localized display name. Also part of the run's definition snapshot, but repeated here
+    /// The step's localized display name. Also part of the recording's definition snapshot, but repeated here
     /// so a reader understands the row without JSON navigation.
     /// </summary>
     public LocalizedText DisplayName { get; set; } = LocalizedText.Empty;
@@ -55,13 +55,13 @@ public class PipelineRunStep
 
     /// <summary>
     /// The build of the assembly the process implementation came from: its informational version, as for
-    /// <see cref="PipelineRun.AppVersion"/>, or its assembly version if it has none.
+    /// <see cref="Recording.AppVersion"/>, or its assembly version if it has none.
     /// </summary>
     public string? ProcessAssemblyVersion { get; set; }
 
     /// <summary>
     /// The state of the step: <see cref="StepState.Running"/> while it runs, its terminal state afterwards.
-    /// A row stuck in <see cref="StepState.Running"/> on a run without terminal state marks the step the
+    /// A row stuck in <see cref="StepState.Running"/> on a recording without terminal state marks the step the
     /// instance died in.
     /// </summary>
     public StepState State { get; set; }
@@ -96,15 +96,15 @@ public class PipelineRunStep
     /// What the step's process was given when it started, one record per value or file, in the order of its parameters.
     /// Empty for a step that ran no process.
     /// </summary>
-    public List<PipelineRunInput> Inputs { get; set; } = new();
+    public List<RecordingInput> Inputs { get; set; } = new();
 
     /// <summary>
     /// The evaluation result of every condition checked for this step, matching or not.
     /// </summary>
-    public List<PipelineRunCondition> Conditions { get; set; } = new();
+    public List<RecordingCondition> Conditions { get; set; } = new();
 
     /// <summary>
     /// The artifacts the step produced (downloads, visualizations, delivery files), by name.
     /// </summary>
-    public List<PipelineRunArtifact> Artifacts { get; set; } = new();
+    public List<RecordingArtifact> Artifacts { get; set; } = new();
 }

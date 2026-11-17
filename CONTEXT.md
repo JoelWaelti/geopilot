@@ -6,13 +6,13 @@ Die Begriffe rund um den Lebenszyklus eines Verarbeitungsjobs und seiner Lieferu
 
 Alles, was geopilot zur Verarbeitung eines Uploads mit einem Mandat im Speicher hält: Zustand, Pipeline und den Verweis auf den Upload. Ein Job entsteht beim Start und lebt bis zu seinem Retirement. Pro Upload ist höchstens ein Job aktiv, also Pending oder Running; ein zweiter Start wird abgelehnt, bis dieser Job endet. Scheitert der Start, bleibt kein Job zurück. Im Code: `ProcessingJob`, gestartet in `JobLifecycle.StartAsync`.
 
-## Lauf
+## Protokoll
 
-Was das Ausführungsprotokoll zu einem Job festhält, vom Start über Preflight und die Schritte der Pipeline bis zum Ausgang. Heute gehört zu jedem Job genau ein Lauf. Anders als der Job überlebt der Lauf das Retirement und Neustarts, siehe [Ausführungsprotokoll](docs/Ausfuehrungsprotokoll.md). Im Code: `PipelineRun`.
+Was das Ausführungsprotokoll zu einem Job festhält, den ganzen Weg vom Start über Preflight und die Schritte der Pipeline bis zur Weitergabe seiner Lieferung, auch wenn diese Tage nach dem Ende der Pipeline geschieht: Upload und Virenscan, Urheber und Deklarierbarkeit, die Schritte samt Eingaben, Bedingungen und Artefakten, den Ausgang und die Zustellversuche der Reaktionen. Sein Verarbeitungszustand ist der Zustand seiner Pipeline; ob die Lieferung weitergegeben ist, sagen die Zustellversuche. Heute gehört zu jedem Job genau ein Protokoll. Anders als der Job überlebt es das Retirement und Neustarts, siehe [Ausführungsprotokoll](docs/Ausfuehrungsprotokoll.md). Im Code: `Recording`, geschrieben vom `IRecorder`.
 
 ## Ausgang
 
-Wie die Pipeline eines Laufs geendet hat, gemeldet vom Runner: zu Ende gelaufen mit dem Zustand, den die Pipeline meldet, Zeitüberschreitung, Herunterfahren oder Absturz. Lässt eine Bedingung die Daten scheitern, läuft die Pipeline mit `Failed` zu Ende. Ein Absturz ist dagegen eine Exception, die den Lauf abbricht: Ein Prozessor wirft, oder das Speichern der Downloads oder das Stagen der Lieferdateien scheitert. Im Code: `RunOutcome`.
+Wie die Pipeline eines Jobs geendet hat, gemeldet vom Runner: zu Ende gelaufen mit dem Zustand, den die Pipeline meldet, Zeitüberschreitung, Herunterfahren oder Absturz. Lässt eine Bedingung die Daten scheitern, läuft die Pipeline mit `Failed` zu Ende. Ein Absturz ist dagegen eine Exception, die den Lauf abbricht: Ein Prozessor wirft, oder das Speichern der Downloads oder das Stagen der Lieferdateien scheitert. Im Code: `RunOutcome`.
 
 ## Folgen
 
@@ -28,7 +28,7 @@ Das Entfernen eines Jobs, wenn seit dem Ende seines Laufs `Processing:JobRetenti
 
 ## Deklarierbar
 
-Ob aus einem Lauf je eine Lieferung werden kann: Wer ihn startet, ist Mitglied einer Organisation des Mandats, und das Mandat nimmt Lieferungen an. Dieselbe Regel entscheidet `allowDelivery` in der Mandatsübersicht; ein öffentliches Mandat öffnet sie Nichtmitgliedern nicht. Entschieden wird einmal beim Start. Einen Lauf, den niemand deklarieren kann, staged der Runner nicht, und seine Deklaration wird abgelehnt, wer auch immer sie verlangt. Im Code: `ProcessingJob.IsDeclarable`, entschieden in `MandateService.IsDeclarableAsync`.
+Ob aus einem Job je eine Lieferung werden kann: Wer ihn startet, ist Mitglied einer Organisation des Mandats, und das Mandat nimmt Lieferungen an. Dieselbe Regel entscheidet `allowDelivery` in der Mandatsübersicht; ein öffentliches Mandat öffnet sie Nichtmitgliedern nicht. Entschieden wird einmal beim Start. Einen Job, den niemand deklarieren kann, staged der Runner nicht, und seine Deklaration wird abgelehnt, wer auch immer sie verlangt. Im Code: `ProcessingJob.IsDeclarable`, entschieden in `MandateService.IsDeclarableAsync`.
 
 ## Versuch
 

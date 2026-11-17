@@ -13,7 +13,7 @@ using System.Reflection.Emit;
 namespace Geopilot.Api.Test.Processing;
 
 [TestClass]
-public class PipelineRunRecorderTest
+public class RecorderTest
 {
     private const string FileDrop = "Geopilot.Pipeline.Channels.FileDrop.FileDropChannel";
 
@@ -22,7 +22,7 @@ public class PipelineRunRecorderTest
     private Mock<IUploadStorage> uploadStorageMock;
     private Mock<IHttpContextAccessor> httpContextAccessorMock;
     private HttpContext? currentHttpContext;
-    private PipelineRunRecorder recorder;
+    private Recorder recorder;
     private Mandate mandate;
     private User user;
     private Declarer declarer;
@@ -41,15 +41,15 @@ public class PipelineRunRecorderTest
         httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         httpContextAccessorMock.SetupGet(a => a.HttpContext).Returns(() => currentHttpContext);
 
-        recorder = new PipelineRunRecorder(
+        recorder = new Recorder(
             context,
             pipelineFactoryMock.Object,
             uploadStorageMock.Object,
             httpContextAccessorMock.Object,
-            Mock.Of<ILogger<PipelineRunRecorder>>());
+            Mock.Of<ILogger<Recorder>>());
 
-        mandate = new Mandate { Name = TestHelpers.Localized(nameof(PipelineRunRecorderTest)), FileTypes = [".xtf"], PipelineId = "pipe_a" };
-        user = new User { FullName = nameof(PipelineRunRecorderTest), AuthIdentifier = Guid.NewGuid().ToString() };
+        mandate = new Mandate { Name = TestHelpers.Localized(nameof(RecorderTest)), FileTypes = [".xtf"], PipelineId = "pipe_a" };
+        user = new User { FullName = nameof(RecorderTest), AuthIdentifier = Guid.NewGuid().ToString() };
         context.Mandates.Add(mandate);
         context.Users.Add(user);
         context.SaveChanges();
@@ -60,7 +60,7 @@ public class PipelineRunRecorderTest
     public void Cleanup() => context.Dispose();
 
     [TestMethod]
-    public async Task RecordJobStartedWritesRunWithManifest()
+    public async Task RecordJobStartedWritesRecordingWithManifest()
     {
         currentHttpContext = new DefaultHttpContext();
         currentHttpContext.Request.Headers.Cookie = "geopilot.auth=token";
@@ -69,32 +69,32 @@ public class PipelineRunRecorderTest
 
         await recorder.RecordJobStartedAsync(job, mandate, declarer, upload);
 
-        var run = await context.PipelineRuns.Include(r => r.Files).Include(r => r.Steps).SingleAsync(r => r.JobId == job.Id);
-        Assert.AreEqual("pipe_a", run.PipelineId);
-        Assert.AreEqual("{}", run.Definition);
-        Assert.AreEqual(mandate.Id, run.MandateId);
-        Assert.AreEqual(user.Id, run.UserId);
-        Assert.AreEqual(ClientKind.WebClient, run.ClientKind);
-        Assert.AreEqual(upload.Id, run.UploadId);
-        Assert.AreEqual("https://storage.example.com/uploads", run.UploadStorageLocation);
-        Assert.AreEqual(ScanState.NotScanned, run.ScanState);
-        Assert.IsNull(run.TerminalState, "a fresh run has no terminal state yet.");
-        Assert.AreNotEqual(string.Empty, run.AppVersion);
+        var recording = await context.Recordings.Include(r => r.Files).Include(r => r.Steps).SingleAsync(r => r.JobId == job.Id);
+        Assert.AreEqual("pipe_a", recording.PipelineId);
+        Assert.AreEqual("{}", recording.Definition);
+        Assert.AreEqual(mandate.Id, recording.MandateId);
+        Assert.AreEqual(user.Id, recording.UserId);
+        Assert.AreEqual(ClientKind.WebClient, recording.ClientKind);
+        Assert.AreEqual(upload.Id, recording.UploadId);
+        Assert.AreEqual("https://storage.example.com/uploads", recording.UploadStorageLocation);
+        Assert.AreEqual(ScanState.NotScanned, recording.ScanState);
+        Assert.IsNull(recording.TerminalState, "a fresh recording has no terminal state yet.");
+        Assert.AreNotEqual(string.Empty, recording.AppVersion);
 
-        Assert.HasCount(2, run.Files);
-        var file = run.Files.Single(f => f.FileName == "data.xtf");
+        Assert.HasCount(2, recording.Files);
+        var file = recording.Files.Single(f => f.FileName == "data.xtf");
         Assert.AreEqual("uploads/1/data.xtf", file.StorageKey);
         Assert.AreEqual(1024, file.DeclaredSize);
         Assert.IsNull(file.Sha256, "hashes are computed by the scan, which has not run yet.");
 
         // All step rows exist from the moment the job is accepted, so a run interrupted during
         // preflight still lists what was planned.
-        Assert.HasCount(2, run.Steps);
-        var firstStep = run.Steps.Single(s => s.StepId == "matching");
+        Assert.HasCount(2, recording.Steps);
+        var firstStep = recording.Steps.Single(s => s.StepId == "matching");
         Assert.AreEqual(0, firstStep.Order);
         Assert.AreEqual(StepState.Pending, firstStep.State);
         Assert.IsNull(firstStep.StartedAt, "a pre-created step row has no start time until the step is reached.");
-        Assert.AreEqual(1, run.Steps.Single(s => s.StepId == "validation").Order);
+        Assert.AreEqual(1, recording.Steps.Single(s => s.StepId == "validation").Order);
     }
 
     [TestMethod]
@@ -107,9 +107,9 @@ public class PipelineRunRecorderTest
 
         await recorder.RecordJobStartedAsync(job, mandate, Declarer.ForClient(client.Id), upload);
 
-        var run = await context.PipelineRuns.SingleAsync(r => r.JobId == job.Id);
-        Assert.AreEqual(client.Id, run.MachineClientId);
-        Assert.IsNull(run.UserId, "a delivery of a machine has no user; the protocol names the client instead.");
+        var recording = await context.Recordings.SingleAsync(r => r.JobId == job.Id);
+        Assert.AreEqual(client.Id, recording.MachineClientId);
+        Assert.IsNull(recording.UserId, "a delivery of a machine has no user; the protocol names the client instead.");
     }
 
     [TestMethod]
@@ -130,14 +130,14 @@ public class PipelineRunRecorderTest
     }
 
     [TestMethod]
-    public async Task TheDatabaseRefusesARunStartedByAUserAndAMachineClient()
+    public async Task TheDatabaseRefusesARecordingStartedByAUserAndAMachineClient()
     {
         // The recorder cannot write this, a Declarer is one or the other, so only the database keeps every
-        // other writer from recording a run that two principals started.
+        // other writer from recording a job that two principals started.
         var client = context.MachineClients.Add(new MachineClient { AuthIdentifier = Guid.NewGuid().ToString(), Name = "TWINLANTERN" }).Entity;
         context.SaveChanges();
 
-        context.PipelineRuns.Add(new PipelineRun
+        context.Recordings.Add(new Recording
         {
             JobId = Guid.NewGuid(),
             PipelineId = "pipe_a",
@@ -154,7 +154,7 @@ public class PipelineRunRecorderTest
 
         await Assert.ThrowsAsync<DbUpdateException>(
             () => context.SaveChangesAsync(),
-            "A run names the user or the machine client that started it, or nobody; a row with both would leave the protocol unable to say who acted.");
+            "A recording names the user or the machine client that started its job, or nobody; a row with both would leave the protocol unable to say who acted.");
         context.ChangeTracker.Clear();
     }
 
@@ -305,16 +305,16 @@ public class PipelineRunRecorderTest
             ProcessingState.Success,
             null);
 
-        var run = await context.PipelineRunsWithIncludes.SingleAsync(r => r.JobId == job.Id);
-        Assert.AreEqual(ProcessingState.Success, run.TerminalState);
-        Assert.IsNotNull(run.TerminalAt);
-        Assert.HasCount(2, run.Steps, "a step that never got a row must be reconciled at run end.");
+        var recording = await context.RecordingsWithIncludes.SingleAsync(r => r.JobId == job.Id);
+        Assert.AreEqual(ProcessingState.Success, recording.TerminalState);
+        Assert.IsNotNull(recording.TerminalAt);
+        Assert.HasCount(2, recording.Steps, "a step that never got a row must be reconciled at run end.");
 
-        var deliveryArtifact = run.Steps.Single(s => s.StepId == "validation").Artifacts.Single();
+        var deliveryArtifact = recording.Steps.Single(s => s.StepId == "validation").Artifacts.Single();
         Assert.AreEqual(ArtifactKind.Delivery, deliveryArtifact.Kind);
         Assert.IsTrue(deliveryArtifact.FromUpload ?? false);
 
-        var pendingRow = run.Steps.Single(s => s.StepId == "packaging");
+        var pendingRow = recording.Steps.Single(s => s.StepId == "packaging");
         Assert.AreEqual(StepState.Pending, pendingRow.State);
         Assert.AreEqual(1, pendingRow.Order);
     }
@@ -333,11 +333,11 @@ public class PipelineRunRecorderTest
 
         await recorder.RecordScanOutcomeAsync(job.Id, scanResult);
 
-        var run = await context.PipelineRuns.Include(r => r.Files).SingleAsync(r => r.JobId == job.Id);
-        Assert.AreEqual(ScanState.ThreatDetected, run.ScanState);
-        Assert.Contains("EICAR", run.ScanDetails);
-        Assert.AreEqual("cafe01", run.Files.Single(f => f.FileName == "data.xtf").Sha256);
-        Assert.IsNull(run.Files.Single(f => f.FileName == "model.ili").Sha256, "a file without hash entry stays unset.");
+        var recording = await context.Recordings.Include(r => r.Files).SingleAsync(r => r.JobId == job.Id);
+        Assert.AreEqual(ScanState.ThreatDetected, recording.ScanState);
+        Assert.Contains("EICAR", recording.ScanDetails);
+        Assert.AreEqual("cafe01", recording.Files.Single(f => f.FileName == "data.xtf").Sha256);
+        Assert.IsNull(recording.Files.Single(f => f.FileName == "model.ili").Sha256, "a file without hash entry stays unset.");
     }
 
     [TestMethod]
@@ -349,8 +349,8 @@ public class PipelineRunRecorderTest
 
         await recorder.RecordScanOutcomeAsync(job.Id, new ScanResult(true, Scanned: false));
 
-        var run = await context.PipelineRuns.SingleAsync(r => r.JobId == job.Id);
-        Assert.AreEqual(ScanState.NotScanned, run.ScanState, "a skipped scan must never be recorded as clean.");
+        var recording = await context.Recordings.SingleAsync(r => r.JobId == job.Id);
+        Assert.AreEqual(ScanState.NotScanned, recording.ScanState, "a skipped scan must never be recorded as clean.");
     }
 
     [TestMethod]
@@ -362,10 +362,10 @@ public class PipelineRunRecorderTest
 
         await recorder.RecordPreflightFailedAsync(job.Id, "ThreatDetected: The uploaded files could not be processed.");
 
-        var run = await context.PipelineRuns.SingleAsync(r => r.JobId == job.Id);
-        Assert.AreEqual(ProcessingState.Failed, run.TerminalState);
-        Assert.IsNotNull(run.TerminalAt);
-        Assert.Contains("ThreatDetected", run.FailureReason);
+        var recording = await context.Recordings.SingleAsync(r => r.JobId == job.Id);
+        Assert.AreEqual(ProcessingState.Failed, recording.TerminalState);
+        Assert.IsNotNull(recording.TerminalAt);
+        Assert.Contains("ThreatDetected", recording.FailureReason);
     }
 
     [TestMethod]
@@ -377,12 +377,12 @@ public class PipelineRunRecorderTest
 
         await recorder.RecordDeclarationFailedAsync(job.Id, "No assets found.");
 
-        var run = await context.PipelineRuns.SingleAsync(r => r.JobId == job.Id);
-        Assert.AreEqual("No assets found.", run.DeclarationFailure);
+        var recording = await context.Recordings.SingleAsync(r => r.JobId == job.Id);
+        Assert.AreEqual("No assets found.", recording.DeclarationFailure);
     }
 
     [TestMethod]
-    public async Task SoftWritesWithoutRunRecordDoNotThrow()
+    public async Task SoftWritesWithoutRecordingDoNotThrow()
     {
         var unknownJobId = Guid.NewGuid();
         var step = StepMock("validation");
@@ -394,18 +394,18 @@ public class PipelineRunRecorderTest
         await recorder.RecordPreflightFailedAsync(unknownJobId, "boom");
         await recorder.RecordDeclarationFailedAsync(unknownJobId, "boom");
 
-        Assert.IsFalse(await context.PipelineRuns.AnyAsync(r => r.JobId == unknownJobId), "soft writes without a run record must be skipped, not fail.");
+        Assert.IsFalse(await context.Recordings.AnyAsync(r => r.JobId == unknownJobId), "soft writes without a recording must be skipped, not fail.");
     }
 
     [TestMethod]
-    public async Task ReactionAttemptStartedWritesARunningRowToTheRunOfTheDelivery()
+    public async Task ReactionAttemptStartedWritesARunningRowToTheRecordingOfTheDelivery()
     {
-        var (run, delivery) = await SeedRunWithDeliveryAsync();
+        var (recording, delivery) = await SeedRecordingWithDeliveryAsync();
         var reaction = ClaimedReaction(delivery, attempt: 2);
 
         await recorder.RecordReactionAttemptStartedAsync(reaction);
 
-        var row = await context.PipelineRunReactionEvents.SingleAsync(e => e.PipelineRunId == run.Id);
+        var row = await context.RecordingReactionEvents.SingleAsync(e => e.RecordingId == recording.Id);
         Assert.AreEqual(delivery.Id, row.DeliveryId);
         Assert.AreEqual("weitergabe", row.ReactionId);
         Assert.AreEqual(ReactionKind.Transfer, row.ReactionKind);
@@ -425,13 +425,13 @@ public class PipelineRunRecorderTest
     [DataRow(null, DisplayName = "No longer held its reaction")]
     public async Task ReactionAttemptFinishedCompletesTheRowOfTheAttempt(ReactionState? state)
     {
-        var (run, delivery) = await SeedRunWithDeliveryAsync();
+        var (recording, delivery) = await SeedRecordingWithDeliveryAsync();
         var reaction = ClaimedReaction(delivery);
         await recorder.RecordReactionAttemptStartedAsync(reaction);
 
         await recorder.RecordReactionAttemptFinishedAsync(reaction, state, TestHelpers.Localized("What the channel reported."));
 
-        var row = await context.PipelineRunReactionEvents.SingleAsync(e => e.PipelineRunId == run.Id);
+        var row = await context.RecordingReactionEvents.SingleAsync(e => e.RecordingId == recording.Id);
         Assert.AreEqual(state, row.State);
         Assert.AreEqual(TestHelpers.Localized("What the channel reported."), row.Message);
         Assert.IsNotNull(row.FinishedAt);
@@ -440,12 +440,12 @@ public class PipelineRunRecorderTest
     [TestMethod]
     public async Task ReactionAttemptFinishedWritesTheRowLateWhenItsStartIsMissing()
     {
-        var (run, delivery) = await SeedRunWithDeliveryAsync();
+        var (recording, delivery) = await SeedRecordingWithDeliveryAsync();
         var reaction = ClaimedReaction(delivery);
 
         await recorder.RecordReactionAttemptFinishedAsync(reaction, ReactionState.Done, TestHelpers.Localized("Delivered to the target."));
 
-        var row = await context.PipelineRunReactionEvents.SingleAsync(e => e.PipelineRunId == run.Id);
+        var row = await context.RecordingReactionEvents.SingleAsync(e => e.RecordingId == recording.Id);
         Assert.AreEqual(reaction.LastAttemptAt, row.OccurredAt);
         Assert.AreEqual(ReactionState.Done, row.State);
         Assert.IsNotNull(row.FinishedAt);
@@ -454,54 +454,54 @@ public class PipelineRunRecorderTest
     [TestMethod]
     public async Task AReactionRowThatCouldNotBeSavedDoesNotTakeTheNextOneWithIt()
     {
-        var (run, delivery) = await SeedRunWithDeliveryAsync();
+        var (recording, delivery) = await SeedRecordingWithDeliveryAsync();
         var refused = ClaimedReaction(delivery);
         refused.ReactionId = new string('x', 200);
         await recorder.RecordReactionAttemptStartedAsync(refused);
 
         await recorder.RecordReactionAttemptStartedAsync(ClaimedReaction(delivery));
 
-        var row = await context.PipelineRunReactionEvents.SingleAsync(e => e.PipelineRunId == run.Id);
+        var row = await context.RecordingReactionEvents.SingleAsync(e => e.RecordingId == recording.Id);
         Assert.AreEqual("weitergabe", row.ReactionId, "the row the database refused is forgotten instead of failing the next write again.");
     }
 
     [TestMethod]
     public async Task ReactionAttemptIsRecordedForADeletedDelivery()
     {
-        var (run, delivery) = await SeedRunWithDeliveryAsync();
+        var (recording, delivery) = await SeedRecordingWithDeliveryAsync();
         delivery.Deleted = true;
         await context.SaveChangesAsync();
 
         await recorder.RecordReactionAttemptStartedAsync(ClaimedReaction(delivery));
 
-        Assert.IsTrue(await context.PipelineRunReactionEvents.AnyAsync(e => e.PipelineRunId == run.Id), "the protocol outlives the deletion of the delivery.");
+        Assert.IsTrue(await context.RecordingReactionEvents.AnyAsync(e => e.RecordingId == recording.Id), "the protocol outlives the deletion of the delivery.");
     }
 
     [TestMethod]
-    public async Task ReactionAttemptsWithoutRunRecordDoNotThrow()
+    public async Task ReactionAttemptsWithoutRecordingDoNotThrow()
     {
-        var withoutRun = new Delivery { JobId = Guid.NewGuid(), Mandate = mandate, DeclaringUser = user };
-        context.Deliveries.Add(withoutRun);
+        var withoutRecording = new Delivery { JobId = Guid.NewGuid(), Mandate = mandate, DeclaringUser = user };
+        context.Deliveries.Add(withoutRecording);
         await context.SaveChangesAsync();
-        var reaction = ClaimedReaction(withoutRun);
+        var reaction = ClaimedReaction(withoutRecording);
 
         await recorder.RecordReactionAttemptStartedAsync(reaction);
         await recorder.RecordReactionAttemptFinishedAsync(reaction, ReactionState.Done, TestHelpers.Localized("Delivered to the target."));
-        await recorder.RecordDeliveryDeletedAsync(withoutRun.Id, [reaction], user.Id);
+        await recorder.RecordDeliveryDeletedAsync(withoutRecording.Id, [reaction], user.Id);
 
-        Assert.IsFalse(await context.PipelineRunReactionEvents.AnyAsync(e => e.DeliveryId == withoutRun.Id), "soft writes without a run record must be skipped, not fail.");
+        Assert.IsFalse(await context.RecordingReactionEvents.AnyAsync(e => e.DeliveryId == withoutRecording.Id), "soft writes without a recording must be skipped, not fail.");
     }
 
     [TestMethod]
     public async Task DeliveryDeletedWritesARowPerReactionWithWhoDeleted()
     {
-        var (run, delivery) = await SeedRunWithDeliveryAsync();
+        var (recording, delivery) = await SeedRecordingWithDeliveryAsync();
         var forwarded = ReactionInState(delivery, "ablage", ReactionState.Done, "Delivered to the target.");
         var dropped = ReactionInState(delivery, "meldung", ReactionState.Deleted, "The delivery was deleted.");
 
         await recorder.RecordDeliveryDeletedAsync(delivery.Id, [forwarded, dropped], user.Id);
 
-        var rows = await context.PipelineRunReactionEvents.Where(e => e.PipelineRunId == run.Id).OrderBy(e => e.Id).ToListAsync();
+        var rows = await context.RecordingReactionEvents.Where(e => e.RecordingId == recording.Id).OrderBy(e => e.Id).ToListAsync();
         Assert.HasCount(2, rows);
         Assert.IsTrue(rows.All(row => row.Event == ReactionEvent.Deletion && row.UserId == user.Id && row.Attempt is null && row.FinishedAt is null));
         Assert.AreEqual("ablage", rows[0].ReactionId);
@@ -513,11 +513,11 @@ public class PipelineRunRecorderTest
     [TestMethod]
     public async Task ReactionsResetWritesARowPerReactionWithWhoReset()
     {
-        var (run, delivery) = await SeedRunWithDeliveryAsync();
+        var (recording, delivery) = await SeedRecordingWithDeliveryAsync();
 
         await recorder.RecordReactionsResetAsync(delivery.Id, [ReactionInState(delivery, "ablage", ReactionState.Pending)], user.Id);
 
-        var row = await context.PipelineRunReactionEvents.SingleAsync(e => e.PipelineRunId == run.Id);
+        var row = await context.RecordingReactionEvents.SingleAsync(e => e.RecordingId == recording.Id);
         Assert.AreEqual(ReactionEvent.Reset, row.Event);
         Assert.AreEqual("ablage", row.ReactionId);
         Assert.AreEqual(ReactionState.Pending, row.State);
@@ -530,7 +530,7 @@ public class PipelineRunRecorderTest
     [TestMethod]
     public async Task AnAttemptAfterAResetCompletesItsOwnRow()
     {
-        var (run, delivery) = await SeedRunWithDeliveryAsync();
+        var (recording, delivery) = await SeedRecordingWithDeliveryAsync();
         var beforeReset = ClaimedReaction(delivery);
         await recorder.RecordReactionAttemptStartedAsync(beforeReset);
         await recorder.RecordReactionAttemptFinishedAsync(beforeReset, ReactionState.Error, TestHelpers.Localized("The base directory does not exist."));
@@ -540,8 +540,8 @@ public class PipelineRunRecorderTest
 
         await recorder.RecordReactionAttemptFinishedAsync(afterReset, ReactionState.Done, TestHelpers.Localized("Delivered to the target."));
 
-        var attempts = await context.PipelineRunReactionEvents
-            .Where(e => e.PipelineRunId == run.Id && e.Event == ReactionEvent.Attempt)
+        var attempts = await context.RecordingReactionEvents
+            .Where(e => e.RecordingId == recording.Id && e.Event == ReactionEvent.Attempt)
             .OrderBy(e => e.Id)
             .ToListAsync();
         Assert.HasCount(2, attempts);
@@ -572,14 +572,14 @@ public class PipelineRunRecorderTest
         ClaimToken = Guid.NewGuid(),
     };
 
-    private async Task<(PipelineRun Run, Delivery Delivery)> SeedRunWithDeliveryAsync()
+    private async Task<(Recording Recording, Delivery Delivery)> SeedRecordingWithDeliveryAsync()
     {
         var job = NewJob(out var upload);
         await recorder.RecordJobStartedAsync(job, mandate, declarer, upload);
         var delivery = new Delivery { JobId = job.Id, Mandate = mandate, DeclaringUser = user };
         context.Deliveries.Add(delivery);
         await context.SaveChangesAsync();
-        return (await context.PipelineRuns.SingleAsync(r => r.JobId == job.Id), delivery);
+        return (await context.Recordings.SingleAsync(r => r.JobId == job.Id), delivery);
     }
 
     private async Task<ClientKind> ClassifyAsync(HttpContext? httpContext)
@@ -587,8 +587,8 @@ public class PipelineRunRecorderTest
         currentHttpContext = httpContext;
         var job = NewJob(out var upload);
         await recorder.RecordJobStartedAsync(job, mandate, declarer, upload);
-        var run = await context.PipelineRuns.SingleAsync(r => r.JobId == job.Id);
-        return run.ClientKind;
+        var recording = await context.Recordings.SingleAsync(r => r.JobId == job.Id);
+        return recording.ClientKind;
     }
 
     private static ProcessingJob NewJob(out UploadInfo upload, params IPipelineStep[] steps)
@@ -633,17 +633,17 @@ public class PipelineRunRecorderTest
         return Activator.CreateInstance(processType);
     }
 
-    private async Task<PipelineRunStep> LoadStepRowAsync(Guid jobId, string stepId)
+    private async Task<RecordingStep> LoadStepRowAsync(Guid jobId, string stepId)
     {
-        var run = await context.PipelineRuns.SingleAsync(r => r.JobId == jobId);
-        return await context.PipelineRunSteps
+        var recording = await context.Recordings.SingleAsync(r => r.JobId == jobId);
+        return await context.RecordingSteps
             .Include(s => s.Conditions)
             .Include(s => s.Artifacts)
             .Include(s => s.Inputs)
-            .SingleAsync(s => s.PipelineRunId == run.Id && s.StepId == stepId);
+            .SingleAsync(s => s.RecordingId == recording.Id && s.StepId == stepId);
     }
 
-    private static StepInput[] AsStepInputs(IEnumerable<PipelineRunInput> rows) => rows
+    private static StepInput[] AsStepInputs(IEnumerable<RecordingInput> rows) => rows
         .OrderBy(row => row.Id)
         .Select(row => new StepInput(row.Parameter, row.Origin, row.Reference, row.Kind, row.Value, row.FileName, row.Size, row.Sha256, row.FromUpload))
         .ToArray();

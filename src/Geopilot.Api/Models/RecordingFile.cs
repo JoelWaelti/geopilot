@@ -1,10 +1,10 @@
 ﻿namespace Geopilot.Api.Models;
 
 /// <summary>
-/// One uploaded file of a <see cref="PipelineRun"/>: the upload manifest entry the protocol keeps after
+/// One uploaded file of a <see cref="Recording"/>: the upload manifest entry the protocol keeps after
 /// the blobs themselves are gone.
 /// </summary>
-public class PipelineRunFile
+public class RecordingFile
 {
     /// <summary>
     /// The unique identifier for the file record.
@@ -12,14 +12,14 @@ public class PipelineRunFile
     public int Id { get; set; }
 
     /// <summary>
-    /// The run this file belongs to.
+    /// The recording this file belongs to.
     /// </summary>
-    public int PipelineRunId { get; set; }
+    public int RecordingId { get; set; }
 
     /// <summary>
-    /// Navigation to the run.
+    /// Navigation to the recording.
     /// </summary>
-    public PipelineRun PipelineRun { get; set; } = null!;
+    public Recording Recording { get; set; } = null!;
 
     /// <summary>
     /// The original file name as uploaded.
@@ -27,14 +27,14 @@ public class PipelineRunFile
     public string FileName { get; set; } = string.Empty;
 
     /// <summary>
-    /// The storage key the file was stored under, relative to the run's
-    /// <see cref="PipelineRun.UploadStorageLocation"/>.
+    /// The storage key the file was stored under, relative to the recording's
+    /// <see cref="Recording.UploadStorageLocation"/>.
     /// </summary>
     public string StorageKey { get; set; } = string.Empty;
 
     /// <summary>
     /// The file size in bytes as declared by the client. The preflight rejects any deviation, so on a
-    /// started run this equals the actual size.
+    /// started job this equals the actual size.
     /// </summary>
     public long DeclaredSize { get; set; }
 

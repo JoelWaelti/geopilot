@@ -7,7 +7,7 @@ namespace Geopilot.Api.Models;
 /// to the run method, or a file the process configuration supplied to the constructor. Kept in the protocol so "what did
 /// this step work on" stays answerable after the files themselves are gone.
 /// </summary>
-public class PipelineRunInput
+public class RecordingInput
 {
     /// <summary>
     /// The unique identifier for the input record.
@@ -17,7 +17,7 @@ public class PipelineRunInput
     /// <summary>
     /// The step record this input belongs to.
     /// </summary>
-    public int PipelineRunStepId { get; set; }
+    public int RecordingStepId { get; set; }
 
     /// <summary>
     /// The name of the run method parameter, or of the constructor parameter for a configured file.
