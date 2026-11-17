@@ -37,6 +37,8 @@ jobs:
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh api:*)"
             ${{ vars.CLAUDE_REVIEW_MAX_BUDGET_USD && format('--max-budget-usd {0}', vars.CLAUDE_REVIEW_MAX_BUDGET_USD) || '' }}
           prompt: /pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+          # Debugging only: prints every Claude message and tool result to the public job log.
+          show_full_output: true
 
       # Cost is an API list price estimate: with an OAuth token the run counts
       # against the subscription's limits instead of being billed per token.
